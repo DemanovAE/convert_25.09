@@ -1540,7 +1540,11 @@ void convertBmn_run8(string inReco="reco.root", string inDigi="digi.root",
     .Define( "vtxRcorr","return sqrt(vtxXcorr*vtxXcorr + vtxYcorr*vtxYcorr);" )
     .Define( "bc1sIntegral_nSigma", bc1fd_nSigma(g1_m_FitBC1,g1_s_FitBC1), {"bc1sIntegral","runId"})
     .Define( "fdIntegral_nSigma", bc1fd_nSigma(g1_m_FitFD,g1_s_FitFD), {"fdIntegral","runId"})
-    
+    //Cuts
+    .Filter("vtxChi2Ndf > std::numeric_limits<float>::min()")
+    .Filter("vtxNtracks >= 2")
+    .Filter("vtxRcorr < 1.")
+    .Filter("vtxZcorr < 1.")
 //    .Define("fdQ","Sum(FDPoint.fCharge*FDPoint.fCharge)")
 //    .Define("fdLight","Sum(FDPoint.fLightYield)")
 //    .Define("fdEloss", fdEloss, {"FDPoint"})
