@@ -8,20 +8,9 @@ using VecF2D = vector<vector<float>>;
 //vector<float> -> RVecF
 //vector Int
 
-TF1 *f1_m2_400_211 = new TF1( "m2_400_211", "pol1", 0, 10 );
-TF1 *f1_sigma_400_211 = new TF1( "sigma_400_211", "pol2", 0, 10 );
-TF1 *f1_m2_400_321 = new TF1( "m2_400_321", "pol1", 0, 10 );
-TF1 *f1_sigma_400_321 = new TF1( "sigma_400_321", "pol2", 0, 10 );
-TF1 *f1_m2_400_2212 = new TF1( "m2_400_2212", "pol1", 0, 10 );
-TF1 *f1_sigma_400_2212 = new TF1( "sigma_400_2212", "pol2", 0, 10 );
-TF1 *f1_m2_400_1000010020 = new TF1( "m2_400_1000010020", "pol1", 0, 10 );
-TF1 *f1_sigma_400_1000010020 = new TF1( "sigma_400_1000010020", "pol2", 0, 10 );
-TF1 *f1_m2_700_211 = new TF1( "m2_700_211", "pol1", 0, 10 );
-TF1 *f1_sigma_700_211 = new TF1( "sigma_700_211", "pol2", 0, 10 );
-TF1 *f1_m2_700_2212 = new TF1( "m2_700_2212", "pol1", 0, 10 );
-TF1 *f1_sigma_700_2212 = new TF1( "sigma_700_2212", "pol2", 0, 10 );
-TF1 *f1_m2_700_1000010020 = new TF1( "m2_700_1000010020", "pol1", 0, 10 );
-TF1 *f1_sigma_700_1000010020 = new TF1( "sigma_700_1000010020", "pol2", 0, 10 );
+double Poly3Poly3(double* xx, double* pp);
+double SkewGaus(double* xx, double* pp);
+double Poly3Gaus(double* xx, double* pp);
 
 std::vector<TGraph *> g1_a_lo_runid_vec;
 std::vector<TGraph *> g1_b_lo_runid_vec;
@@ -34,6 +23,9 @@ TGraph *g1_a_up_plane = nullptr;
 TGraph *g1_b_up_plane = nullptr;
 TGraph *g1_a_b_uTol = nullptr;
 Double_t a_dedx_calib, b_dedx_calib;
+
+std::map<int, std::vector<int>> tof400_strips_to_exclude{ {0, {39, 40, 41, 42}}, {6, {19}}, {8, {29,30,31}}, {9, {15,16,26,27,28}},{12, {40}}, {16, {7, 8, 9, 10, 11, 12, 13, 14, 16, 19, 20, 21, 22, 23, 24, 25, 37}}, {18, {4, 13, 14, 15}}, {19, {35, 37}} };
+std::map<int, std::vector<int>> tof700_strips_to_exclude{ {2, {25,26,}}, {3, {31}}, {5, {31}}, {6, {31}}, {8, {7,11,15,31}}, {9, {31}}, {10, {28,31}}, {12, {31}}, {13, {18,19,20,21,22,23,24,25,26,27,228,29,30,31}}, {14, {31}}, {16, {31}}, {17, {31}}, {18, {11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,31}}, {19, {31}}, {20,{31}}, {21, {13,14,15,23,24,25,27,30,31}}, {22, {31}}, {24, {31}}, {25, {31}}, {26, {6, 31}}, {27, {31}}, {28, {31}}, {29, {8,31}}, {30, {15,17,31}}, {31, {31}}, {32, {31}}, {33,{22,23,24,25,31}}, {34, {24,25,31}}, {35,{31}}, {36, {31}}, {37, {31}}, {38, {31}}, {39, {31}}, {40, {1,2,3,4,5,6,7,8,9,11,17,18,19,20,26,27,31}}, {45, {11,12,13,15}}, {49, {15}}, {52, {3}}, {55, {8,9}}, {57, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}} };
 
 std::vector<int> physical_runs{6667, 6668, 6669, 6670, 6671, 6672, 6673, 6674, 6675, 6676, 6677, 6678, 6679, 6680, 6681, 6683, 6684, 6685, 666, 6687, 6689, 6690, 6691, 6692, 6694, 6695, 6696, 6698, 6699, 6732, 6733, 6734, 6737, 6738, 6739, 6740, 6745, 6752, 6753, 6760, 6761, 6765, 6766, 6767, 6768, 6769, 6771, 6772, 6773, 6774, 6779, 6780, 6782, 6783, 6785, 6786, 6788, 6794, 6795, 6797, 6799, 6800, 6803, 6815, 6816, 6817, 6818, 6819, 6820, 6821, 6822, 6879, 6882, 6883, 6884, 6886, 6887, 6889, 6891, 6900, 6901, 6902, 6903, 6904, 6905, 6906, 6907, 6908, 6909, 6910, 6911, 6915, 6916, 6918, 6919, 6920, 6921, 6923, 6924, 6926, 6927, 6928, 6929, 6930, 6931, 6932, 6933, 6934, 6935, 6936, 6937, 6939, 6940, 6968, 6970, 6972, 6973, 6975, 6976, 6977, 6978, 6979, 6980, 6981, 6982, 6983, 6984, 6990, 6991, 6992, 6993, 6994, 6995, 6997, 6998, 6999, 7000, 7002, 7003, 7004, 7005, 7006, 7008, 7009, 7010, 7011, 7012, 7030, 7031, 7032, 7033, 7034, 7035, 7037, 7038, 7040, 7041, 7042, 7043, 7044, 7046, 7047, 7048, 7049, 7050, 7051, 7052, 7053, 7054, 7055, 7056, 7075, 7076, 7077, 7078, 7081, 7082, 7083, 7084, 7086, 7087, 7091, 7092, 7093, 7094, 7096, 7097, 7098, 7100, 7101, 7102, 7103, 7104, 7125, 7126, 7127, 7128, 7129, 7130, 7131, 7132, 7133, 7135, 7136, 7137, 7138, 7146, 7149, 7150, 7151, 7154, 7155, 7156, 7157, 7159, 7160, 7161, 7162, 7163, 7164, 7165, 7166, 7167, 7168, 7173, 7174, 7175, 7176, 7177, 7178, 7179, 7180, 7181, 7182, 7184, 7186, 7187, 7188, 7191, 7192, 7193, 7194, 7195, 7200, 7202, 7203, 7205, 7206, 7207, 7208, 7209, 7211, 7212, 7213, 7214, 7215, 7216, 7217, 7218, 7219, 7220, 7223, 7225, 7255, 7258, 7261, 7263, 7265, 7267, 7268, 7269, 7271, 7272, 7274, 7276, 7278, 7279, 7281, 7284, 7286, 7288, 7290, 7291, 7312, 7313, 7320, 7321, 7322, 7323, 7325, 7326, 7327, 7328, 7337, 7342, 7343, 7344, 7345, 7346, 7348, 7349, 7351, 7352, 7353, 7354, 7355, 7356, 7357, 7358, 7359, 7361, 7363, 7364, 7365, 7367, 7369, 7374, 7376, 7377, 7378, 7379, 7380, 7381, 7382, 7386, 7387, 7388, 7389, 7390, 7391, 7392, 7393, 7395, 7396, 7397, 7398, 7399, 7400, 7401, 7402, 7403, 7405, 7406, 7408, 7409, 7410, 7411, 7412, 7413, 7414, 7415, 7417, 7418, 7419, 7421, 7422, 7423, 7425, 7427, 7428, 7429, 7431, 7432, 7433, 7434, 7435, 7437, 7439, 7440, 7441, 7442, 7444, 7445, 7446, 7447, 7449, 7451, 7452, 7453, 7454, 7455, 7456, 7457, 7458, 7460, 7461, 7469, 7471, 7472, 7473, 7474, 7477, 7478, 7480, 7481, 7482, 7483, 7484, 7487, 7488, 7489, 7490, 7491, 7492, 7493, 7495, 7497, 7498, 7500, 7501, 7502, 7513, 7514, 7515, 7517, 7519, 7520, 7521, 7528, 7529, 7530, 7531, 7532, 7533, 7534, 7537, 7538, 7539, 7542, 7543, 7545, 7546, 7547, 7549, 7550, 7551, 7552, 7553, 7554, 7564, 7565, 7566, 7567, 7569, 7570, 7572, 7573, 7574, 7575, 7577, 7579, 7581, 7584, 7585, 7586, 7587, 7590, 7591, 7592, 7596, 7597, 7599, 7600, 7604, 7605, 7606, 7607, 7608, 7609, 7611, 7612, 7613, 7622, 7623, 7625, 7626, 7627, 7628, 7630, 7631, 7633, 7634, 7635, 7636, 7638, 7639, 7640, 7641, 7643, 7644, 7645, 7646, 7647, 7649, 7655, 7656, 7657, 7659, 7660, 7662, 7663, 7664, 7665, 7666, 7668, 7669, 7670, 7671, 7673, 7674, 7675, 7676, 7677, 7678, 7679, 7681, 7682, 7684, 7685, 7687, 7688, 7689, 7690, 7692, 7693, 7694, 7696, 7698, 7700, 7701, 7702, 7703, 7704, 7705, 7710, 7712, 7713, 7714, 7715, 7716, 7717, 7718, 7721, 7723, 7724, 7725, 7726, 7727, 7728, 7729, 7730, 7732, 7733, 7734, 7735, 7736, 7737, 7751, 7752, 7753, 7755, 7756, 7761, 7762, 7763, 7764, 7766, 7767, 7768, 7769, 7771, 7772, 7775, 7776, 7778, 7779, 7780, 7781, 7783, 7784, 7785, 7786, 7788, 7789, 7790, 7791, 7794, 7795, 7796, 7797, 7798, 7801, 7802, 7803, 7814, 7816, 7819, 7821, 7824, 7825, 7828, 7829, 7830, 7831, 7832, 7834, 7835, 7836, 7842, 7843, 7845, 7846, 7847, 7848, 7850, 7851, 7852, 7853, 7855, 7856, 7857, 7858, 7859, 7865, 7868, 7869, 7870, 7871, 7873, 7874, 7876, 7877, 7878, 7880, 7882, 7883, 7884, 7885, 7886, 7887, 7890, 7891, 7892, 7893, 7894, 7896, 7897, 7898, 7899, 7900, 7901, 7903, 7904, 7905, 7906, 7907, 7908, 7910, 7911, 7912, 7913, 7914, 7931, 7932, 7933, 7935, 7937, 7938, 7939, 7941, 7942, 7944, 7948, 7949, 7950, 7952, 7954, 7955, 7957, 7958, 7960, 7961, 7962, 7963, 7965, 7966, 7967, 7975, 7977, 7978, 7979, 7981, 7982, 7986, 7988, 7989, 7990, 7991, 7992, 7995, 7996, 7997, 7998, 7999, 8000, 8001, 8002, 8004, 8005, 8006, 8007, 8008, 8009, 8013, 8014, 8015, 8016, 8018, 8020, 8021, 8022, 8023, 8026, 8027, 8028, 8029, 8030, 8031, 8032, 8033, 8038, 8039, 8040, 8041, 8042, 8044, 8045, 8046, 8047, 8048, 8050, 8051, 8052, 8053, 8055, 8056, 8057, 8058, 8059, 8061, 8063, 8064, 8065, 8066, 8068, 8069, 8070, 8071, 8072, 8074, 8075, 8076, 8077, 8079, 8080, 8081, 8082, 8084, 8086, 8087, 8088, 8089, 8090, 8097, 8100, 8101, 8102, 8104, 8106, 8108, 8109, 8110, 8111, 8112, 8113, 8115, 8116, 8117, 8118, 8119, 8121, 8122, 8123, 8124, 8129, 8130, 8131, 8133, 8137, 8138, 8139, 8140, 8141, 8142, 8144, 8156, 8157, 8158, 8159, 8160, 8161, 8162, 8165, 8166, 8167, 8168, 8169, 8170, 8173, 8174, 8175, 8176, 8177, 8180, 8183, 8184, 8186, 8188, 8190, 8191, 8192, 8193, 8195, 8196, 8198, 8199, 8201, 8202, 8203, 8204, 8205, 8206, 8207, 8208, 8209, 8210, 8211, 8212, 8213, 8215, 8217, 8219, 8220, 8221, 8228, 8229, 8230, 8231, 8235, 8236, 8238, 8239, 8240, 8242, 8244, 8245, 8246, 8247, 8248, 8250, 8251, 8253, 8254, 8255, 8256, 8257, 8258, 8265, 8266, 8267, 8268, 8270, 8271, 8273, 8274, 8275, 8276, 8277, 8278, 8279, 8281, 8284, 8286, 8287, 8288, 8289, 8290, 8292, 8293, 8294, 8295, 8297, 8298, 8299, 8300, 8305, 8306};
 std::vector<int> bad_runs{7313, 7415, 7417, 7435, 7469, 7517, 7519, 7520, 7537, 7575, 7604, 7630, 7657, 7659, 7679, 7681, 7705, 7735, 7843, 7847, 7848, 7850, 7851, 7852, 7853, 7855, 7856, 7857, 7858, 7859, 7865, 7868, 7907, 7931, 7932, 7933, 7935, 7937, 7938, 7939, 7954, 7955, 8031, 8032, 8033, 8115, 8121, 8167, 8201, 8204, 8205, 8208, 8209, 8210, 8211, 8212, 8213, 8215, 8247, 8265, 8266, 8267, 8281, 8289};
@@ -55,99 +47,14 @@ TChain* makeChain(string& filename, const char* treename) {
   return chain;
 }
 
-bool isGoodSimTrack(const CbmMCTrack &track)
-{
-  if (track.GetStartZ() > 900) return false;
-  return true;
-}
 
-XYZVector ExtrapolateStraightLine(const FairTrackParam *par, float z)
-{
-  float dz = z - par->GetZ();
-  float x = par->GetX() + par->GetTx() * dz;
-  float y = par->GetY() + par->GetTy() * dz;
-  return {x, y, z};
-}
-
-double getMass(int pdg)
-{
-  if(pdg<1000000) 
-    return TDatabasePDG::Instance()->GetParticle(pdg)->Mass();
-  else 
-    return 0.931*(pdg/10%1000);
-}
-
-int getCharge(int pdg)
-{
-  if(pdg<1000000){
-    TParticlePDG *partPDG = TDatabasePDG::Instance()->GetParticle(pdg);
-    if (partPDG)
-      return partPDG->Charge()/3.;
-    else
-      return -999.;
-  }
-  else 
-    return pdg/10000%1000;
-}
-
-vector<fourVector> simMomentum(const RVec<CbmMCTrack> tracks)
-{
-  vector<fourVector> momenta;
-  for (auto& track:tracks) {
-    if (!isGoodSimTrack(track))
-      continue;
-    TVector3 mom;
-    track.GetMomentum(mom);
-    double mass=getMass(track.GetPdgCode());
-    momenta.push_back({mom.Pt(),mom.Eta(),mom.Phi(),sqrt(mass*mass+mom.Mag2())});
-  }
-  return momenta;
-}
- 
-vector<XYZTVector> simPosStart(const RVec<CbmMCTrack> tracks)
-{
-  vector<XYZTVector> pos;
-  for (auto& track:tracks) {
-    if (!isGoodSimTrack(track))
-      continue;
-    pos.push_back({track.GetStartX(),track.GetStartY(),track.GetStartZ(),track.GetStartT()});
-  }
-  return pos;
-}
-
-RVec<int> simMotherId(const RVec<CbmMCTrack> tracks)
-{
-  vector<int> mothId;
-  for (auto& track:tracks) {
-    if (!isGoodSimTrack(track))
-      continue;
-    mothId.push_back(track.GetMotherId());
-  }
-  return mothId;
-}
-
-RVec<int> simPdg(const RVec<CbmMCTrack> tracks)
-{
-  vector<int> pdg;
-  for (auto& track:tracks) {
-    if (!isGoodSimTrack(track))
-      continue;
-    pdg.push_back(track.GetPdgCode());
-  }
-  return pdg;
-}
-
-RVec<short> simCharge (const RVec<int> pdg)
-{
-  vector<short> ch;
-  for (auto &p:pdg)
-    ch.push_back(getCharge(p));
-  return ch;
-}
-
-RVec<float> trackP(const RVec<BmnGlobalTrack> tracks)
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////data function/////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// global track
+RVecF trackPq(const RVec<BmnGlobalTrack> tracks)
 try {
-  vector<float> momenta;
+  RVecF momenta;
   for (auto track:tracks)
     momenta.push_back(1./track.GetParamFirst()->GetQp());
   return momenta;
@@ -156,15 +63,11 @@ try {
   throw e;
 }
 
-vector<fourVector> trackMomentum(const RVec<BmnGlobalTrack> tracks)
+RVecF trackP(const RVec<BmnGlobalTrack> tracks)
 try {
-  vector<fourVector> momenta;
-  for (auto track:tracks) {
-    auto *par = track.GetParamFirst();   
-    TVector3 mom;
-    par->Momentum(mom);
-    momenta.push_back({mom.Pt(),mom.Eta(),mom.Phi(),0});
-  }   
+  RVecF momenta;
+  for (auto track:tracks)
+    momenta.push_back(abs(1./track.GetParamFirst()->GetQp()));
   return momenta;
 } catch( const std::exception& e ){
   std::cout << __func__ << std::endl;
@@ -184,18 +87,71 @@ try {
   throw e;
 }
 
-vector<XYZVector> recDca(const RVec<BmnGlobalTrack> tracks, const CbmVertex vtx)
+RVecF trackPt(const RVec<BmnGlobalTrack> tracks)
 try {
-  vector<XYZVector> dca;
+  RVecF momenta;
   for (auto track:tracks) {
-    auto par = track.GetParamFirst();
-    dca.push_back({par->GetX()-vtx.GetX(),par->GetY()-vtx.GetY(),par->GetZ()-vtx.GetZ()});
-  }
-  return dca;
+    momenta.push_back(abs(track.GetPt()));
+  }   
+  return momenta;
 } catch( const std::exception& e ){
   std::cout << __func__ << std::endl;
   throw e;
 }
+
+RVecF trackPhi(const RVec<BmnGlobalTrack> tracks)
+try {
+  RVecF momenta;
+  for (auto track:tracks) {
+    momenta.push_back(abs(track.GetPhi()));
+  }   
+  return momenta;
+} catch( const std::exception& e ){
+  std::cout << __func__ << std::endl;
+  throw e;
+}
+
+RVecF trackEta(const RVec<BmnGlobalTrack> tracks)
+try {
+  RVecF momenta;
+  for (auto track:tracks) {
+    momenta.push_back(abs(track.GetEta()));
+  }   
+  return momenta;
+} catch( const std::exception& e ){
+  std::cout << __func__ << std::endl;
+  throw e;
+}
+
+//DCA gl tr
+const auto recDcaXYZR = [](std::string XYZR){
+  return [XYZR](const RVec<BmnGlobalTrack> tracks, const CbmVertex vtx){
+    RVecF dca;
+    dca.reserve(tracks.size());
+    for (auto track:tracks) {
+      auto par = track.GetParamFirst();
+      if(!par){
+        dca.push_back(-999.0f);
+        continue;
+      }
+      auto x = par->GetX()-vtx.GetX();
+      auto y = par->GetY()-vtx.GetY();
+      auto z = par->GetZ()-vtx.GetZ();
+      auto r = std::sqrt( x*x + y*y );
+      if(XYZR=="X")
+        dca.push_back(x);
+      else if (XYZR=="Y")
+        dca.push_back(y);
+      else if (XYZR=="Z")
+        dca.push_back(z);
+      else if (XYZR=="R")
+        dca.push_back(r);
+      else
+        dca.push_back(-999.0f);
+    }
+    return dca;
+  };
+};
 
 VecF2D covMatrix(RVec<BmnGlobalTrack> global_tracks, RVec<CbmStsTrack> tracks)
 try {
@@ -282,7 +238,6 @@ std::array<float, 3> cramerFieldSolver3x3( std::array<float, 3> field, std::arra
   std::cout << __func__ << std::endl;
   throw e;
 }
-
 
 VecF2D magneticField(RVec<BmnGlobalTrack> global_tracks, RVec<CbmStsTrack> tracks, RVec<CbmStsHit> sts_hits)
 try {
@@ -391,6 +346,7 @@ try {
   std::cout << __func__ << std::endl;
   throw e;
 }
+
 VecF2D trParamLast(RVec<BmnGlobalTrack> global_tracks)
 try {
   vector<vector<float>> parameters;
@@ -498,25 +454,6 @@ try {
   throw e;
 }
 
-RVec<int> stsTrackSimPdg(ROOT::VecOps::RVec<int> sim_index, ROOT::VecOps::RVec<int> sim_pdg) try {
-  vector<int> pdg;
-  for( auto idx : sim_index ) {
-    if( idx < 0 ) {
-      pdg.push_back(-1);
-      continue;
-    }
-    if( idx > sim_pdg.size() ) {
-      pdg.push_back(-1);
-      continue;
-    }
-    pdg.push_back(sim_pdg.at(idx));
-  }
-  return pdg;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
-}
-
 /// BeamHit
 vector<XYZVector> beamHitXYZ(const RVec<BmnSiBTHit> tracks)
 try {
@@ -552,34 +489,6 @@ try {
   throw e;
 }
 
-RVec<int> recSimIndex(const RVec<BmnGlobalTrack> recTracks, const RVec<CbmMCTrack> simTracks)
-try {
-  vector<int> newIndex;
-  int shift=0;
-  int nSimTracks = simTracks.size();
-  for (int i=0;i<nSimTracks;i++) {
-    if (!isGoodSimTrack(simTracks.at(i)))
-    {
-      shift++;
-      newIndex.push_back(-1);
-    }
-    else
-      newIndex.push_back(i-shift);
-  }
-  vector<int> simIndex;
-  for (auto track:recTracks) {
-    int oldIndex=track.GetRefIndex();
-    if (oldIndex<0 || oldIndex>=nSimTracks)
-      simIndex.push_back(-1);
-    else
-      simIndex.push_back(newIndex.at(oldIndex));
-  }
-  return simIndex;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
-}
-
 vector<XYZVector> recPosLast(const RVec<BmnGlobalTrack> tracks)
 try {
   vector<XYZVector> pos;
@@ -591,6 +500,90 @@ try {
 } catch( const std::exception& e ){
   std::cout << __func__ << std::endl;
   throw e;
+}
+
+auto TofHitPlane(const RVec<BmnTofHit>& tofHits)
+try
+{
+  // print.qf()
+  RVec<int> hit_mod_num;
+  hit_mod_num.reserve(tofHits.size());
+  for( const auto& hit : tofHits )
+  {
+    int mod = ((hit.GetDetectorID() & 0x0000FF00) >> 8) - 1;
+    hit_mod_num.push_back(mod);
+  }
+  return hit_mod_num;
+}
+catch(const std::exception &e)
+{
+    std::cout << __func__ << std::endl;
+    throw e;
+}
+
+auto TofHitStrip(const RVec<BmnTofHit>& tofHits)
+try
+{
+  RVec<int> hit_strip_num;
+  hit_strip_num.reserve(tofHits.size());
+  for( const auto& hit : tofHits )
+  {
+    int strip = ((hit.GetDetectorID() & 0x000000FF)) - 1;
+    hit_strip_num.push_back(strip);
+  }
+  return hit_strip_num;
+}
+catch(const std::exception &e)
+{
+    std::cout << __func__ << std::endl;
+    throw e;
+}
+
+
+//=========== debug functions ==================
+auto trTofHitPlane(const RVec<int> fHitIndex, const vector<int>& tofHits)
+try
+{
+  RVec<int> hit_mod_num(fHitIndex.size(), -1);
+  for(int i = 0; i < fHitIndex.size(); ++i)
+  {
+    if (fHitIndex.at(i) < 0) continue;
+    hit_mod_num.at(i) = tofHits.at(fHitIndex.at(i));
+  }
+  return hit_mod_num;
+}
+catch(const std::exception &e)
+{
+    std::cout << __func__ << std::endl;
+    std::cout << e.what() << std::endl;
+    throw e;
+}
+
+auto trTofHitStrip(const RVec<int> fHitIndex, const vector<int>& tofHits)
+try
+{
+  RVec<int> hit_strip_num(fHitIndex.size(), -1);
+  for(int i = 0; i < fHitIndex.size(); ++i)
+  {
+    if (fHitIndex.at(i) < 0) continue;
+    hit_strip_num.at(i) = tofHits.at(fHitIndex.at(i));
+  }
+  return hit_strip_num;
+}
+catch(const std::exception &e)
+{
+    std::cout << __func__ << std::endl;
+    std::cout << e.what() << std::endl;
+    throw e;
+}
+//=================================================
+
+XYZVector ExtrapolateStraightLine(const FairTrackParam *par, float z)
+{
+  float dz = z - par->GetZ();
+  float x = par->GetX() + par->GetTx() * dz;
+  float y = par->GetY() + par->GetTy() * dz;
+  return {x, y, z};
 }
 
 vector<XYZVector> recPos450(const RVec<BmnGlobalTrack> tracks)
@@ -623,7 +616,7 @@ try {
   auto testHit=(BmnTofHit*)hits.At(0);
   if (testHit)
   {
-    bool tof400 = testHit->GetZ()<600 ? true : false;
+    bool tof400 = testHit->GetZ()<550 ? true : false;
     for (auto track:tracks){
       int hitIndex = tof400 ? track.GetTof1HitIndex() : track.GetTof2HitIndex();
       if (hitIndex<0 || !hits.At(hitIndex)) 
@@ -639,7 +632,7 @@ try {
       TVector3 posAtHitZ(posAtHitZ_.x(), posAtHitZ_.y(), posAtHitZ_.z());
       TVector3 hitPos;
       hit->Position(hitPos);
-      auto posDiff = pos - posAtHitZ;
+      auto posDiff = hitPos - posAtHitZ; 
       res.push_back({posDiff.X(), posDiff.Y(), posDiff.Z()});
     }
   }
@@ -651,7 +644,7 @@ try {
 
 RVec<int> moduleId (const vector<XYZVector> modulePos)
 try {
-  vector <int> moduleIds;
+  RVec<int> moduleIds;
   for (int i=0;i<modulePos.size();i++)
     moduleIds.push_back(i+1);
   return moduleIds;
@@ -680,7 +673,7 @@ try {
     nodeName = detectorNode->GetName();
     nodeName.ToLower();
     if (nodeName.Contains(detectorTag))
-    {	
+    { 
       nodeFound=true;
       break;
     }
@@ -733,11 +726,12 @@ try {
   throw e;
 }
 
+// FHCal
 RVec<float> fhcalModE(BmnFHCalEvent event)
 try {
-  vector<float> fhcalModEnergy_;
+  RVec<float> fhcalModEnergy_;
   for (int i = 0; i < 54; i++)
-    fhcalModEnergy_.push_back(event.GetModule(i+1)->GetEnergy());
+    fhcalModEnergy_.push_back(event.GetModule(i+1)->GetEnergy() * 0.005); // *0.005: mip -> GeV
   return fhcalModEnergy_;
 } catch( const std::exception& e ){
   std::cout << __func__ << std::endl;
@@ -753,7 +747,7 @@ try {
     fhcalSecEnergy_.emplace_back();
     for (Int_t iSect = 1; iSect <= module->GetNsections(); iSect++)
     {
-      fhcalSecEnergy_.back().push_back(module->GetSectionEnergy(iSect));
+      fhcalSecEnergy_.back().push_back(module->GetSectionEnergy(iSect) * 0.005); // *0.005: mip -> GeV
     }
   }
   return fhcalSecEnergy_;
@@ -764,7 +758,7 @@ try {
 
 RVec<float> scwallModQ(BmnScWallEvent event)
 try {
-  vector<float> scwallModCharge_;
+  RVec<float> scwallModCharge_;
   for (int i = 0; i < 174; i++)
     scwallModCharge_.push_back(event.GetCell(i+1)->GetSignal());
   return scwallModCharge_;
@@ -773,12 +767,12 @@ try {
   throw e;
 }
 
-RVec<float> hodoModQ(BmnHodoEvent event)
+RVec<float> hodoStripQ(BmnHodoEvent event)
 try {
-  vector<float> hodoModCharge_;
+  RVec<float> hodoStripCharge_;
   for (int i = 0; i < 16; i++)
-    hodoModCharge_.push_back(event.GetStrip(i+1)->GetSignal());
-  return hodoModCharge_;
+    hodoStripCharge_.push_back(event.GetStrip(i+1)->GetSignal());
+  return hodoStripCharge_;
 } catch( const std::exception& e ){
   std::cout << __func__ << std::endl;
   throw e;
@@ -787,7 +781,7 @@ try {
 RVec<float> getEloss(const RVec<int> moduleId, const RVec<double> eLossDigis, const vector<XYZVector> modulePos)
 try {
   int nModules=modulePos.size();
-  vector<float> eLossModules(nModules,0);
+  RVec<float> eLossModules(nModules,0);
   int nDigis=eLossDigis.size();
   for(int i=0;i<nDigis;i++)
     if(moduleId.at(i) <= nModules)
@@ -798,18 +792,9 @@ try {
   throw e;
 }
 
-RVec<float> fdEloss (const RVec<BmnFDPoint> points)
-{
-  vector<float> eLoss;
-  for (auto p:points)
-    if (getCharge(p.GetPdgId()) > 0)
-      eLoss.push_back(p.GetEnergyLoss());
-  return eLoss;
-}
-
 RVec<bool> hasHitFhcal (RVec<CbmMCTrack> particles)
 {
-  vector<bool> hasHit;
+  RVec<bool> hasHit;
   for(auto &part:particles)
     hasHit.push_back(part.GetNPoints(kFHCAL)>0);
   return hasHit;
@@ -817,7 +802,7 @@ RVec<bool> hasHitFhcal (RVec<CbmMCTrack> particles)
 
 RVec<short> modNhits (RVec<short> digiModIds, RVec<short> pointModIds)
 {
-  vector<short> nHits(digiModIds.size(),0);
+  RVec<short> nHits(digiModIds.size(),0);
   for (auto &pointModId:pointModIds)
     for (short i=0;i<digiModIds.size();i++)
       if(pointModId==digiModIds.at(i))
@@ -825,13 +810,6 @@ RVec<short> modNhits (RVec<short> digiModIds, RVec<short> pointModIds)
   return nHits;
 }
 
-RVec<float> mcPointEloss(const TClonesArray points)
-{
-  vector<float>el; 
-  for (auto p:points)
-    el.push_back(((FairMCPoint*)p)->GetEnergyLoss());
-  return el;
-}
 
 int trigNSamples(const RVec<BmnTrigWaveDigit> trigger)
 try {
@@ -885,13 +863,52 @@ try {
   throw e;
 }
 
+RVec<double> remove_beta400_from_bad_strips(const RVec<double> fBeta, const RVec<int> fHitIndex, const RVec<int> fPlane, const RVec<int> fStrip)
+try{
+  RVec<double> fBetaClean_(fBeta);
+  for( int i = 0; i <  fHitIndex.size(); i++){
+    auto hit_idx = fHitIndex.at(i);
+      if (hit_idx < 0 ) continue;
+      auto plane = fPlane.at(hit_idx);
+      auto strip = fStrip.at(hit_idx);
+      if (auto iter_pl = tof400_strips_to_exclude.find(plane); iter_pl != tof400_strips_to_exclude.end() ){
+        if ( std::find(tof400_strips_to_exclude.at(plane).begin(), tof400_strips_to_exclude.at(plane).end(), strip) != tof400_strips_to_exclude.at(plane).end())
+        fBetaClean_.at(i) = -999.;
+      }
+  }
+    return fBetaClean_;
+} catch( const std::exception& e ){
+  std::cout << e.what() << std::endl;
+  std::cout << __func__ << std::endl;
+  throw e;
+}
+
+RVec<double> remove_beta700_from_bad_strips(const RVec<double> fBeta, const RVec<int> fHitIndex, const RVec<int> fPlane, const RVec<int> fStrip)
+try{
+  RVec<double> fBetaClean_(fBeta);
+  for( int i = 0; i <  fHitIndex.size(); i++){
+    auto hit_idx = fHitIndex.at(i);
+      if (hit_idx < 0 ) continue;
+      auto plane = fPlane.at(hit_idx);
+      auto strip = fStrip.at(hit_idx);
+      if (auto iter_pl = tof700_strips_to_exclude.find(plane); iter_pl != tof700_strips_to_exclude.end() ){
+        if ( std::find(tof700_strips_to_exclude.at(plane).begin(), tof700_strips_to_exclude.at(plane).end(), strip) != tof700_strips_to_exclude.at(plane).end())
+          fBetaClean_.at(i) = -999.;
+      }
+  }
+    return fBetaClean_;
+} catch( const std::exception& e ){
+  std::cout << __func__ << std::endl;
+  std::cout << e.what() << std::endl;
+  throw e;
+}
 
 // m2
-RVec<float> trM2(const vector<fourVector> mTr, const RVec<double> fBeta)
+RVec<float> trM2(const RVecF mTr, const RVec<double> fBeta)
 try {
   RVec<float> trM2_;
   for (int itr=0; itr<mTr.size(); itr++) {
-    auto p = mTr.at(itr).P();
+    auto p = mTr.at(itr);
     auto p2 = p*p;
     auto beta = fBeta.at(itr);
     auto beta2 = beta*beta;
@@ -904,126 +921,22 @@ try {
   std::cout << __func__ << std::endl;
   throw e;
 }
-
-// nSigma 211 TOF-400
-RVec<float> nSigmaM2Tof400_211(const vector<fourVector> mTr, const RVec<float> mTrM2)
-try {
-  RVec<float> nSigma;
-  for (int itr=0; itr<mTr.size(); itr++) {
-    auto p = abs(mTr.at(itr).P());
-    auto _m2 = mTrM2.at(itr);
-    auto mean = f1_m2_400_211->Eval(p);
-    auto sigma = f1_sigma_400_211->Eval(p);
-    auto _nsigma = _m2!=-999.0 ? (_m2 - mean) / sigma : -999.0;
-    nSigma.push_back(_nsigma);
-  }
-  return nSigma;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
-}
-// nSigma 2212 TOF-400
-RVec<float> nSigmaM2Tof400_2212(const vector<fourVector> mTr, const RVec<float> mTrM2)
-try {
-  RVec<float> nSigma;
-  for (int itr=0; itr<mTr.size(); itr++) {
-    auto p = abs(mTr.at(itr).P());
-    auto _m2 = mTrM2.at(itr);
-    auto mean = f1_m2_400_2212->Eval(p);
-    auto sigma = f1_sigma_400_2212->Eval(p);
-    auto _nsigma = _m2!=-999.0 ? (_m2 - mean) / sigma : -999.0;
-    nSigma.push_back(_nsigma);
-  }
-  return nSigma;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
-}
-// nSigma 321 TOF-400
-RVec<float> nSigmaM2Tof400_321(const vector<fourVector> mTr, const RVec<float> mTrM2)
-try {
-  RVec<float> nSigma;
-  for (int itr=0; itr<mTr.size(); itr++) {
-    auto p = abs(mTr.at(itr).P());
-    auto _m2 = mTrM2.at(itr);
-    auto mean = f1_m2_400_321->Eval(p);
-    auto sigma = f1_sigma_400_321->Eval(p);
-    auto _nsigma = _m2!=-999.0 ? (_m2 - mean) / sigma : -999.0;
-    nSigma.push_back(_nsigma);
-  }
-  return nSigma;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
-}
-// nSigma 1000010020 TOF-400
-RVec<float> nSigmaM2Tof400_1000010020(const vector<fourVector> mTr, const RVec<float> mTrM2)
-try {
-  RVec<float> nSigma;
-  for (int itr=0; itr<mTr.size(); itr++) {
-    auto p = abs(mTr.at(itr).P());
-    auto _m2 = mTrM2.at(itr);
-    auto mean = f1_m2_400_1000010020->Eval(p);
-    auto sigma = f1_sigma_400_1000010020->Eval(p);
-    auto _nsigma = _m2!=-999.0 ? (_m2 - mean) / sigma : -999.0;
-    nSigma.push_back(_nsigma);
-  }
-  return nSigma;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
-}
-// nSigma 211 TOF-700
-RVec<float> nSigmaM2Tof700_211(const vector<fourVector> mTr, const RVec<float> mTrM2)
-try {
-  RVec<float> nSigma;
-  for (int itr=0; itr<mTr.size(); itr++) {
-    auto p = abs(mTr.at(itr).P());
-    auto _m2 = mTrM2.at(itr);
-    auto mean = f1_m2_700_211->Eval(p);
-    auto sigma = f1_sigma_700_211->Eval(p);
-    auto _nsigma = _m2!=-999.0 ? (_m2 - mean) / sigma : -999.0;
-    nSigma.push_back(_nsigma);
-  }
-  return nSigma;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
-}
-// nSigma 2212 TOF-700
-RVec<float> nSigmaM2Tof700_2212(const vector<fourVector> mTr, const RVec<float> mTrM2)
-try {
-  RVec<float> nSigma;
-  for (int itr=0; itr<mTr.size(); itr++) {
-    auto p = abs(mTr.at(itr).P());
-    auto _m2 = mTrM2.at(itr);
-    auto mean = f1_m2_700_2212->Eval(p);
-    auto sigma = f1_sigma_700_2212->Eval(p);
-    auto _nsigma = _m2!=-999.0 ? (_m2 - mean) / sigma : -999.0;
-    nSigma.push_back(_nsigma);
-  }
-  return nSigma;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
-}
-// nSigma 1000010020 TOF-700
-RVec<float> nSigmaM2Tof700_1000010020(const vector<fourVector> mTr, const RVec<float> mTrM2)
-try {
-  RVec<float> nSigma;
-  for (int itr=0; itr<mTr.size(); itr++) {
-    auto p = abs(mTr.at(itr).P());
-    auto _m2 = mTrM2.at(itr);
-    auto mean = f1_m2_700_1000010020->Eval(p);
-    auto sigma = f1_sigma_700_1000010020->Eval(p);
-    auto _nsigma = _m2!=-999.0 ? (_m2 - mean) / sigma : -999.0;
-    nSigma.push_back(_nsigma);
-  }
-  return nSigma;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
-}
+// nSigma PID
+const auto nSigmaPID = [](TF1* f1_mean, TF1* f1_sigma){
+  return [f1_mean,f1_sigma](const RVecF vec_pq, const RVecF vec_m2){
+    RVecF vec_n_sigma;
+    vec_n_sigma.reserve( vec_pq.size() );
+    for( size_t i=0; i < vec_pq.size(); ++i ){
+      auto m2 = vec_m2.at(i);
+      auto pq = vec_pq.at(i);
+      auto mean = f1_mean->Eval(abs(pq));
+      auto sigma = f1_sigma->Eval(abs(pq));
+      float n_sigma = ( m2 - mean ) / sigma;
+      vec_n_sigma.push_back( (pq > 0 && m2!=-999.0) ? n_sigma : 999.0f );
+    }
+    return vec_n_sigma;     
+  };
+};
 
 //dEdx from Irina
 auto CalcEnergyLoss(const std::vector<std::vector<float>>& clusters_vec)
@@ -1125,9 +1038,7 @@ const auto trEnergyLoss = [](int run_id, bool is_physical=false)
     };
 };
 
-
-
-// pileup
+//pile-up by Oleg Golosov
 int CentralHitIndexBC1S(BmnBC1hitInfo hit)
 try {
   return hit.GetCentralHitIndexBC1S();
@@ -1177,14 +1088,22 @@ try {
   throw e;
 }
 
-void convertBmn_run8(string inReco="reco.root", string inDigi="digi.root", string inRunidDedxCalib = "run8_dedx_calibR_coeff.root", string inStsStationDedxCalib = "run8_dedx_calibS_coeff.root", std::string fileOut = "out.tree.root")
+
+// root -l -q -b convertBmn_run8.C'("/eos/nica/bmn/exp/dst/run8/25.09.0/mpd_run_Top_8130_ev0_p6.root","/eos/nica/bmn/exp/dst/run8/25.09.0/mpd_run_Top_8130_ev0_p6.root")'
+
+// main functions
+void convertBmn_run8(string inReco="reco.root", string inDigi="digi.root", 
+                     string inRunidDedxCalib = "run8_dedx_calibR_coeff.root", string inStsStationDedxCalib = "run8_dedx_calibS_coeff.root",
+                     std::string fileOut = "out.tree.root",
+                     string str_pid400_functions_file = "pars400_25.04.root", string str_pid700_functions_file = "pars700_25.04.root")
 {
   
+  TStopwatch timer1;
+  timer1.Start();
+
   TChain *chainRec=makeChain(inReco, "bmndata");
   TChain *chainDigi=makeChain(inDigi, "bmndata");
-  //TChain *chainBC1hitInfo=makeChain(inBC1hitInfo, "bmndata");
   chainRec->AddFriend(chainDigi);
-  //chainRec->AddFriend(chainBC1hitInfo);
   ROOT::RDataFrame d(*chainRec);
 
   int nEvents = chainRec->GetEntries();
@@ -1297,8 +1216,6 @@ void convertBmn_run8(string inReco="reco.root", string inDigi="digi.root", strin
   b_dedx_calib = g1_a_b_uTol->GetPointY(1);
   //dEdx calib
 
-
-
   //magField = new BmnNewFieldMap("field_sp41v5_ascii_Extrap.root");
   //FieldMap_1900_extrap_noPed
   magField = new BmnNewFieldMap("FieldMap_1900_extrap_noPed.root");
@@ -1309,63 +1226,146 @@ void convertBmn_run8(string inReco="reco.root", string inDigi="digi.root", strin
   auto hodoModPos=modulePos(geoFileName.Data(),"hodo");
   auto fhcalModPos=modulePos(geoFileName.Data(),"fhcal");
 
-  //pion TOF-400
-  //TF1 *f1_m2_400_211 = new TF1( "m2_400_211", "pol1", 0, 10 );
-  f1_m2_400_211->SetParameter( 0, 0.03911 );
-  f1_m2_400_211->SetParameter( 1, -0.02269 );
-  //TF1 *f1_sigma_400_211 = new TF1( "sigma_400_211", "pol2", 0, 10 );
-  f1_sigma_400_211->SetParameter( 0, 0.04135 );
-  f1_sigma_400_211->SetParameter( 1, -0.03773 );
-  f1_sigma_400_211->SetParameter( 2, 0.02134 );
-  //kaon TOF-400
-  //TF1 *f1_m2_400_321 = new TF1( "m2_400_321", "pol1", 0, 10 );
-  f1_m2_400_321->SetParameter( 0, 0.2181 );
-  f1_m2_400_321->SetParameter( 1, 0.001171 );
-  //TF1 *f1_sigma_400_321 = new TF1( "sigma_400_321", "pol2", 0, 10 );
-  f1_sigma_400_321->SetParameter( 0, 0.2596 );
-  f1_sigma_400_321->SetParameter( 1, -0.2067 );
-  f1_sigma_400_321->SetParameter( 2, 0.06465 );
-  //proton TOF-400
-  //TF1 *f1_m2_400_2212 = new TF1( "m2_400_2212", "pol1", 0, 10 );
-  f1_m2_400_2212->SetParameter( 0, 0.9461 );
-  f1_m2_400_2212->SetParameter( 1, -0.02658 );
-  //TF1 *f1_sigma_400_2212 = new TF1( "sigma_400_2212", "pol2", 0, 10 );
-  f1_sigma_400_2212->SetParameter( 0, 0.08764 );
-  f1_sigma_400_2212->SetParameter( 1, -0.02868 );
-  f1_sigma_400_2212->SetParameter( 2, 0.01334 );
-  //d/He4 TOF-400
-  //TF1 *f1_m2_400_1000010020 = new TF1( "m2_400_1000010020", "pol1", 0, 10 );
-  f1_m2_400_1000010020->SetParameter( 0, 3.684 );
-  f1_m2_400_1000010020->SetParameter( 1, -0.02706 );
-  //TF1 *f1_sigma_400_1000010020 = new TF1( "sigma_400_1000010020", "pol2", 0, 10 );
-  f1_sigma_400_1000010020->SetParameter( 0, 0.3756 );
-  f1_sigma_400_1000010020->SetParameter( 1, -0.1047 );
-  f1_sigma_400_1000010020->SetParameter( 2, 0.02066 );
-  // TOF-700
-  //pion TOF-700
-  //TF1 *f1_m2_700_211 = new TF1( "m2_700_211", "pol1", 0, 10 );
-  f1_m2_700_211->SetParameter( 0, -0.07376 );
-  f1_m2_700_211->SetParameter( 1, 0.08399 );
-  //TF1 *f1_sigma_700_211 = new TF1( "sigma_700_211", "pol2", 0, 10 );
-  f1_sigma_700_211->SetParameter( 0, 0.01582 );
-  f1_sigma_700_211->SetParameter( 1, -0.01641 );
-  f1_sigma_700_211->SetParameter( 2, 0.03549 );
-  //proton TOF-700
-  //TF1 *f1_m2_700_2212 = new TF1( "m2_700_2212", "pol1", 0, 10 );
-  f1_m2_700_2212->SetParameter( 0, 0.919 );
-  f1_m2_700_2212->SetParameter( 1, 0.0007007 );
-  //TF1 *f1_sigma_700_2212 = new TF1( "sigma_700_2212", "pol2", 0, 10 );
-  f1_sigma_700_2212->SetParameter( 0, 0.01756 );
-  f1_sigma_700_2212->SetParameter( 1, 0.02298 );
-  f1_sigma_700_2212->SetParameter( 2, 0.01183 );
-  //d/He4 TOF-700
-  //TF1 *f1_m2_700_1000010020 = new TF1( "m2_700_1000010020", "pol1", 0, 10 );
-  f1_m2_700_1000010020->SetParameter( 0, 3.692 );
-  f1_m2_700_1000010020->SetParameter( 1, -0.0268 );
-  //TF1 *f1_sigma_700_1000010020 = new TF1( "sigma_700_1000010020", "pol2", 0, 10 );
-  f1_sigma_700_1000010020->SetParameter( 0, 0.2818 );
-  f1_sigma_700_1000010020->SetParameter( 1, -0.111 );
-  f1_sigma_700_1000010020->SetParameter( 2, 0.03891 );
+  TF1* f1_211_m_400 = nullptr;
+  TF1* f1_211_s_400 = nullptr;
+  TF1* f1_211_m_700_proto = nullptr;
+  TF1* f1_211_s_700_proto = nullptr;
+
+  TF1* f1_2212_m_400 = nullptr;
+  TF1* f1_2212_s_400 = nullptr;
+  TF1* f1_2212_m_700 = nullptr;
+  TF1* f1_2212_s_700 = nullptr;
+    
+  TF1* f1_1000010020_m_400_proto = nullptr;
+  TF1* f1_1000010020_s_400 = nullptr;
+  TF1* f1_1000010020_m_700_proto = nullptr;
+  TF1* f1_1000010020_s_700 = nullptr;
+
+  TF1* f1_1000010020_m_400 = new TF1("f1_1000010020_m_400", Poly3Poly3, 0., 10., 9);
+  TF1* f1_211_m_700 = new TF1("f1_211_m_700", Poly3Gaus, 0., 10., 9);
+  TF1* f1_211_s_700 = new TF1("f1_211_s_700", SkewGaus, 0., 10., 4);
+  TF1* f1_1000010020_m_700 = new TF1("f1_1000010020_m_700", Poly3Poly3, 0., 10., 9);
+
+  auto file_pid400 = TFile::Open( str_pid400_functions_file.c_str(), "READ" );
+  if (file_pid400){
+    printf("reading PID function from file (TOF400)\n");
+    file_pid400->cd();
+    file_pid400->GetObject("fit_211_x0", f1_211_m_400);
+    file_pid400->GetObject("fit_211_sigma", f1_211_s_400);
+    file_pid400->GetObject("fit_2212_x0", f1_2212_m_400);
+    file_pid400->GetObject("fit_2212_sigma", f1_2212_s_400);
+    file_pid400->GetObject("fit_1000010020_sigma", f1_1000010020_s_400);
+    file_pid400->GetObject("fit_1000010020_x0", f1_1000010020_m_400_proto);
+    double* pars400_de_x0 = new double[f1_1000010020_m_400_proto->GetNpar()];
+    f1_1000010020_m_400_proto->GetParameters(pars400_de_x0);
+    f1_1000010020_m_400->SetParameters(pars400_de_x0);
+    delete [] pars400_de_x0;
+    file_pid400->Close();
+  }
+
+  auto file_pid700 = TFile::Open( str_pid700_functions_file.c_str(), "READ" );
+  if(file_pid700){
+    printf("reading PID function from file (TOF700)\n");
+    file_pid700->cd();
+    file_pid700->GetObject("fit_211_x0", f1_211_m_700_proto);
+    file_pid700->GetObject("fit_211_sigma", f1_211_s_700_proto);
+    double* pars700_211_x0 = new double[f1_211_m_700_proto->GetNpar()];
+     double* pars700_211_s = new double[f1_211_s_700_proto->GetNpar()];
+    f1_211_m_700_proto->GetParameters(pars700_211_x0);
+    f1_211_s_700_proto->GetParameters(pars700_211_s);
+    f1_211_m_700->SetParameters(pars700_211_x0);  
+    f1_211_s_700->SetParameters(pars700_211_s);
+
+    file_pid700->GetObject("fit_2212_x0", f1_2212_m_700);
+    file_pid700->GetObject("fit_2212_sigma", f1_2212_s_700);
+
+    file_pid700->GetObject("fit_1000010020_sigma", f1_1000010020_s_700);
+    file_pid700->GetObject("fit_1000010020_x0", f1_1000010020_m_700_proto);
+    double* pars700_de_x0 = new double[f1_1000010020_m_700_proto->GetNpar()];
+    f1_1000010020_m_700_proto->GetParameters(pars700_de_x0);
+    f1_1000010020_m_700->SetParameters(pars700_de_x0);
+
+    delete [] pars700_211_x0;
+    delete [] pars700_211_s;
+    delete [] pars700_de_x0;
+    delete f1_1000010020_m_400_proto;
+    delete f1_1000010020_m_700_proto;
+    file_pid700->Close();
+  }
+  
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+  //Для работы с центральностью с димом
+  TGraphErrors* g1_FitVtxX = nullptr;
+  TGraphErrors* g1_FitVtxY = nullptr;
+  TGraphErrors* g1_FitVtxZ = nullptr;
+  
+  TGraphErrors* g1_m_FitBC1 = nullptr;
+  TGraphErrors* g1_s_FitBC1 = nullptr;
+  TGraphErrors* g1_m_FitFD = nullptr;
+  TGraphErrors* g1_s_FitFD = nullptr;
+  
+  auto file_fit_VtxXYZ = TFile::Open( "/nica/mpd1/demanov/convert/convert_run8_25.09/run8_25.09_corr_VtxXYZ_cent.root", "READ" );
+  auto file_fit_bc1fd =  TFile::Open( "/nica/mpd1/demanov/convert/convert_run8_25.09/run8_25.09_corr_bc1fd_cent.root", "READ" );
+  
+  if(file_fit_VtxXYZ!=nullptr){
+    file_fit_VtxXYZ->cd();
+    g1_FitVtxX = file_fit_VtxXYZ->Get<TGraphErrors>("grGausNew_cct_nVtxMpd2_h2_RunId_vtx_x_mpd");
+    g1_FitVtxY = file_fit_VtxXYZ->Get<TGraphErrors>("grNew_cct_nVtxMpd2_h2_RunId_vtx_y_mpd");
+    g1_FitVtxZ = file_fit_VtxXYZ->Get<TGraphErrors>("grNew_cct_nVtxMpd2_h2_RunId_vtx_z_mpd");
+    
+    file_fit_bc1fd->cd();
+    g1_m_FitBC1 = file_fit_bc1fd->Get<TGraphErrors>("gr_cct_nVtxMpd2_h2_RunId_bc1sInt_1");
+    g1_s_FitBC1 = file_fit_bc1fd->Get<TGraphErrors>("gr_cct_nVtxMpd2_h2_RunId_bc1sInt_2");
+    g1_m_FitFD = file_fit_bc1fd->Get<TGraphErrors>("gr_cct_nVtxMpd2_h2_RunId_fdInt_1");
+    g1_s_FitFD = file_fit_bc1fd->Get<TGraphErrors>("gr_cct_nVtxMpd2_h2_RunId_fdInt_2");
+  }
+  ///////// Warning part /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  if(g1_FitVtxX==nullptr) std::cout<<"Warning! No corrections found for VtxX. These corrections will not be applied."<<std::endl;
+  if(g1_FitVtxY==nullptr) std::cout<<"Warning! No corrections found for VtxY. These corrections will not be applied."<<std::endl;
+  if(g1_FitVtxZ==nullptr) std::cout<<"Warning! No corrections found for VtxZ. These corrections will not be applied."<<std::endl;
+  
+  if(g1_m_FitBC1==nullptr) std::cout<<"Warning! No corrections found for mean BC1. These corrections will not be applied."<<std::endl;
+  if(g1_s_FitBC1==nullptr) std::cout<<"Warning! No corrections found for sigma BC1. These corrections will not be applied."<<std::endl;
+  if(g1_m_FitFD==nullptr) std::cout<<"Warning! No corrections found for mean FD. These corrections will not be applied."<<std::endl;
+  if(g1_s_FitFD==nullptr) std::cout<<"Warning! No corrections found for sigma FD. These corrections will not be applied."<<std::endl;
+
+  
+  //cirrections functions
+  auto vtx_correction_generator = []( TGraphErrors* g1_calib ){
+      return [g1_calib](double _val, UInt_t _runId){
+        return _val - (g1_calib!=nullptr ? g1_calib->Eval( static_cast<double>(_runId)) : 0.);
+      };
+  };
+
+  auto bc1fd_nSigma = []( TGraphErrors* g1_m_calib, TGraphErrors* g1_s_calib ){
+      return [g1_m_calib,g1_s_calib](float _val, UInt_t _runId){
+        auto mean = (g1_m_calib!=nullptr ? g1_m_calib->Eval( static_cast<double>(_runId)) : 0.);
+        auto sigma = (g1_s_calib!=nullptr ? g1_s_calib->Eval( static_cast<double>(_runId)) : 1.);
+        return (_val - mean)/sigma;
+      };
+  };
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
 
   auto dd=d
     // pileup
@@ -1380,121 +1380,93 @@ void convertBmn_run8(string inReco="reco.root", string inDigi="digi.root", strin
     .Define("kV0cut", "kV0closest.at(0)<-200 && kV0closest.at(1)>200") 
     .Define("k1cut", "k1closest.at(0)<-1600 && k1closest.at(1)>600") 
     .Define("kV1cut", "kV1closest.at(0)<-1800 && kV1closest.at(1)>600")
-    .Define("noPileup", "if(k1central && k0cut && kV0cut && k1cut && kV1cut) return 1; else if(k1central) return -1; else return 0;")
-    //.Range(1000,1010)
+    .Define("noPileup", "if(k1central==1 && k0cut && kV0cut && k1cut && kV1cut) return 1; else if(k1central==-1) return -1; else return 0;")
     .Define("runId",[run_id](){ return run_id; }, {} )
     .Define("evtId","DstEventHeader.fEventId")
+    //trigger mask
     .Define("triggerMapBR","BmnTrigInfo.fInputsBR")
     .Define("triggerMapAR","BmnTrigInfo.fInputsAR")
     //BC1
     .Define("bc1sNSamples",trigNSamples,{"TQDC_BC1S"})
     .Define("bc1sIntegral",trigIntegral,{"TQDC_BC1S"})
     .Define("bc1sAmplitude",trigAmp,{"TQDC_BC1S"})
+    .Define("bc1sTrigTime",trigTime,{"TQDC_BC1S"})
     .Define("bc1sTdcValues",trigValues,{"TQDC_BC1S"})
     .Define("bc1sTdcTimes",trigTdcTimes,{"TQDC_BC1S"})
-    .Define("bc1tNSamples",trigNSamples,{"TQDC_BC1T"})
-    .Define("bc1tIntegral",trigIntegral,{"TQDC_BC1T"})
-    .Define("bc1tAmplitude",trigAmp,{"TQDC_BC1T"})
-    .Define("bc1tTdcValues",trigValues,{"TQDC_BC1T"})
-    .Define("bc1tTdcTimes",trigTdcTimes,{"TQDC_BC1T"})
-    .Define("bc1bNSamples",trigNSamples,{"TQDC_BC1B"})
-    .Define("bc1bIntegral",trigIntegral,{"TQDC_BC1B"})
-    .Define("bc1bAmplitude",trigAmp,{"TQDC_BC1B"})
-    .Define("bc1bTdcValues",trigValues,{"TQDC_BC1B"})
-    .Define("bc1bTdcTimes",trigTdcTimes,{"TQDC_BC1B"})
-    //BC2AS BC2AT, BC2AB
+    //BC2AS
     .Define("bc2asIntegral",trigIntegral,{"TQDC_BC2AS"})
     .Define("bc2asAmplitude",trigAmp,{"TQDC_BC2AS"})
+    .Define("bc2asTrigTime",trigTime,{"TQDC_BC2AS"})
     .Define("bc2asTimes",trigTdcTimes,{"TQDC_BC2AS"})
-    .Define("bc2atIntegral",trigIntegral,{"TQDC_BC2AT"})
-    .Define("bc2atAmplitude",trigAmp,{"TQDC_BC2AT"})
-    .Define("bc2atTimes",trigTdcTimes,{"TQDC_BC2AT"})
-    .Define("bc2abIntegral",trigIntegral,{"TQDC_BC2AB"})
-    .Define("bc2abAmplitude",trigAmp,{"TQDC_BC2AB"})
-    .Define("bc2abTimes",trigTdcTimes,{"TQDC_BC2AB"})
-    //BC2MS, BC2MT, BC2MB
+    //BC2MS
     .Define("bc2msIntegral",trigIntegral,{"TQDC_BC2MS"})
     .Define("bc2msAmplitude",trigAmp,{"TQDC_BC2MS"})
+    .Define("bc2msTrigTime",trigTime,{"TQDC_BC2MS"})
     .Define("bc2msTimes",trigTdcTimes,{"TQDC_BC2MS"})
-    .Define("bc2mtIntegral",trigIntegral,{"TQDC_BC2MT"})
-    .Define("bc2mtAmplitude",trigAmp,{"TQDC_BC2MT"})
-    .Define("bc2mtTimes",trigTdcTimes,{"TQDC_BC2MT"})
-    .Define("bc2mbIntegral",trigIntegral,{"TQDC_BC2MB"})
-    .Define("bc2mbAmplitude",trigAmp,{"TQDC_BC2MB"})
-    .Define("bc2mbTimes",trigTdcTimes,{"TQDC_BC2MB"})
     //vcs
     .Define("vcsNSamples",trigNSamples,{"TQDC_VCS"})
     .Define("vcsIntegral",trigIntegral,{"TQDC_VCS"})
     .Define("vcsAmplitude",trigAmp,{"TQDC_VCS"})
+    .Define("vcsTrigTime",trigTime,{"TQDC_VCS"})
     .Define("vcsTdcValues",trigValues,{"TQDC_VCS"})
     .Define("vcsTdcTimes",trigTdcTimes,{"TQDC_VCS"})
-    .Define("vctNSamples",trigNSamples,{"TQDC_VCT"})
-    .Define("vctIntegral",trigIntegral,{"TQDC_VCT"})
-    .Define("vctAmplitude",trigAmp,{"TQDC_VCT"})
-    .Define("vctTdcValues",trigValues,{"TQDC_VCT"})
-    .Define("vctTdcTimes",trigTdcTimes,{"TQDC_VCT"})
-    .Define("vcbNSamples",trigNSamples,{"TQDC_VCB"})
-    .Define("vcbIntegral",trigIntegral,{"TQDC_VCB"})
-    .Define("vcbAmplitude",trigAmp,{"TQDC_VCB"})
-    .Define("vcbTdcValues",trigValues,{"TQDC_VCB"})
-    .Define("vcbTdcTimes",trigTdcTimes,{"TQDC_VCB"})
     //FD
     .Define("fdNSamples",trigNSamples,{"TQDC_FD"})
     .Define("fdIntegral",trigIntegral,{"TQDC_FD"})
     .Define("fdAmplitude",trigAmp,{"TQDC_FD"})
+    .Define("fdTrigTime",trigTime,{"TQDC_FD"})  
     .Define("fdTdcValues",trigValues,{"TQDC_FD"})
     .Define("fdTdcTimes",trigTdcTimes,{"TQDC_FD"})  
     //BD
     .Define("bdMult","BmnTrigInfo.fBDMult")
     .Define("bdModId", "BD.fMod")
     .Define("bdModAmp", "BD.fAmp")
-    .Define("simdMult","BmnTrigInfo.fSiMDMult")
+    .Define("bdTrigTime", "BD.fTime")
+    .Define("siMDMult","BmnTrigInfo.fSiMDMult")
     // Vertex
-    .Define("vtxX","PrimaryVertex.fX")
-    .Define("vtxY","PrimaryVertex.fY")
-    .Define("vtxZ","PrimaryVertex.fZ")
-    .Define("vtxNtracks","PrimaryVertex.fNTracks")
-    .Define("vtxChi2","PrimaryVertex.fChi2")
-    .Define("vtxNdf","PrimaryVertex.fNDF")
-    .Define("vtxXMpd","MpdVertex.fX")
-    .Define("vtxYMpd","MpdVertex.fY")
-    .Define("vtxZMpd","MpdVertex.fZ")
-    .Define("vtxNtracksMpd","MpdVertex.fNTracks")
-    .Define("vtxChi2Mpd","MpdVertex.fChi2")
-    .Define("vtxNdfMpd","MpdVertex.fNDF")
-    .Define("trMom",trackMomentum,{"BmnGlobalTrack"})
+    .Define("vtxX","MpdVertex.fX")
+    .Define("vtxY","MpdVertex.fY")
+    .Define("vtxZ","MpdVertex.fZ")
+    .Define("vtxR","return sqrt(vtxX*vtxX + vtxY*vtxY);" )
+    .Define("vtxNtracks","MpdVertex.fNTracks")
+    .Define("vtxChi2","MpdVertex.fChi2")
+    .Define("vtxNdf","MpdVertex.fNDF")
+    .Define("vtxChi2Ndf","return MpdVertex.fChi2/MpdVertex.fNDF")
+    //global tracks    
     .Define("trNhits","BmnGlobalTrack.fNhits")
     .Define("trNdf","BmnGlobalTrack.fNDF")
     .Define("trChi2","BmnGlobalTrack.fChi2")
-    .Define("trP",trackP,{"BmnGlobalTrack"})
     .Define("trChi2vtx","BmnGlobalTrack.fChi2InVertex")
     .Define("trLength","BmnGlobalTrack.fLength")
+    .Define("trP",trackP,{"BmnGlobalTrack"})
+    .Define("trPq",trackPq,{"BmnGlobalTrack"})
     .Define("trCharge",recCharge,{"BmnGlobalTrack"})
-    .Define("trDca",recDca,{"BmnGlobalTrack","PrimaryVertex."})
-    .Define("trDcaMpd",recDca,{"BmnGlobalTrack","MpdVertex."})
+    .Define("trPt",trackPt,{"BmnGlobalTrack"})
+    .Define("trEta",trackEta,{"BmnGlobalTrack"})
+    .Define("trPhi",trackPhi,{"BmnGlobalTrack"})
+    .Define("trDcaX",recDcaXYZR("X"),{"BmnGlobalTrack","MpdVertex."})
+    .Define("trDcaY",recDcaXYZR("Y"),{"BmnGlobalTrack","MpdVertex."})
+    .Define("trDcaZ",recDcaXYZR("Z"),{"BmnGlobalTrack","MpdVertex."})
+    .Define("trDcaR",recDcaXYZR("R"),{"BmnGlobalTrack","MpdVertex."})
+    //TOF
     .Define("trTof400hit","BmnGlobalTrack.fTof1Hit")
     .Define("trTof700hit","BmnGlobalTrack.fTof2Hit")
     .Define("trBetaTof400","BmnGlobalTrack.fBeta400")
     .Define("trBetaTof700","BmnGlobalTrack.fBeta700")
     //digits info        
     .Define("gemDigits","GEM.fUniqueID")
-    .Define("stsDigits","SILICON.fUniqueID")
+    .Define("fsdDigits","SILICON.fUniqueID")
+    .Define("tof400Digits","TOF400.fUniqueID")
+    .Define("tof700Digits","TOF701.fUniqueID")
+    //.Define("tof400Digits","return (TOF400.fUniqueID).size()")
+    //.Define("tof700Digits","return (TOF701.fUniqueID).size()") // в digi - правильная ветка 701, в dst 700
+    // Далее идут vector<vector< float >> или lheujt
     .Define("stsTrackCovMatrix", covMatrix, { "BmnGlobalTrack", "StsVector" })
     .Define("stsTrackMagField", magneticField, { "BmnGlobalTrack", "StsVector", "StsHit" })
     .Define("stsTrackParameters", stsTrackParameters, { "BmnGlobalTrack", "StsVector" })
-    //.Define("trParamFirst", trParamFirst, { "BmnGlobalTrack" }) дублирует globalTrackParameters
     .Define("trParamLast", trParamLast, { "BmnGlobalTrack" })
-    .Define("globalTrackParameters", globalTrackParameters, { "BmnGlobalTrack" })
+    .Define("globalTrackParameters", trParamFirst, { "BmnGlobalTrack" })
     .Define("globalTrackCovMatrix", globalTrackCovMatrix, { "BmnGlobalTrack" })
-    .Define("stsTrackMomentum", stsTrackMomentum, { "BmnGlobalTrack", "StsVector" })
-    .Define("stsTrackChi2Ndf", stsTrackChi2Ndf, { "BmnGlobalTrack", "StsVector" })
-    .Define("stsTrackNdf", stsTrackNdf, { "BmnGlobalTrack", "StsVector" })
-    .Define("stsTrackNhits", stsTrackNhits, { "BmnGlobalTrack", "StsVector" })
-    //nSigma from TOF-400 and TOF-700
-    .Define("trM2Tof400",trM2,{"trMom","trBetaTof400"})
-    .Define("trM2Tof700",trM2,{"trMom","trBetaTof700"})
-    //dEdx
-    .Define("trEnergyLoss", trEnergyLoss(run_id, is_physical_run), {"BmnGlobalTrack", "StsVector", "StsHit", "BmnGemLowerCluster", "BmnGemUpperCluster", "BmnSiliconLowerCluster", "BmnSiliconUpperCluster"})
     //beam track
     .Define("beamHitXYZ", beamHitXYZ, { "BmnSiBTHit" })
     .Define("beamHitStation", beamHitStation, { "BmnSiBTHit" })
@@ -1503,41 +1475,72 @@ void convertBmn_run8(string inReco="reco.root", string inDigi="digi.root", strin
     .Define("beamTrackNDF", "BmnBeamTrack.fNDF")
     .Define("beamTrackB",   "BmnBeamTrack.fB")
     .Define("beamTrackParameters", BeamTrackParameters, { "BmnBeamTrack" })
-
-    .Define("tof400Digits","TOF400.fUniqueID")
-    .Define("tof400Plane","TOF400.fPlane")
-    .Define("tof400Strip","TOF400.fStrip")
+    //
+    .Define("stsTrackMomentum", stsTrackMomentum, { "BmnGlobalTrack", "StsVector" })
+    .Define("stsTrackChi2Ndf", stsTrackChi2Ndf, { "BmnGlobalTrack", "StsVector" })
+    .Define("stsTrackNdf", stsTrackNdf, { "BmnGlobalTrack", "StsVector" })
+    .Define("stsTrackNhits", stsTrackNhits, { "BmnGlobalTrack", "StsVector" })
+    //TOF-400
+    .Define("tof400Plane", TofHitPlane, {"BmnTof400Hit"})
+    .Define("tof400Strip", TofHitStrip, {"BmnTof400Hit"})
     .Define("tof400hitPos",tofHitPosition,{"BmnTof400Hit"})
     .Define("tof400hitT","BmnTof400Hit.fTimeStamp")
     .Define("tof400hitL","BmnTof400Hit.fLength")
     .Define("tof400hitResX","BmnTof400Hit.fResX")
     .Define("tof400hitResY","BmnTof400Hit.fResY")
     .Define("tof400hitRefIndex","BmnTof400Hit.fRefIndex")
-    .Define("tof400hitResCalc",tofRes,{"BmnGlobalTrack","BmnTof400Hit"})
-
-    .Define("tof700Digits","TOF700.fUniqueID")
-    .Define("tof700Plane","TOF700.fPlane")
-    .Define("tof700Strip","TOF700.fStrip")
+    //.Define("tof400hitResCalc",tofRes,{"BmnGlobalTrack","BmnTof400Hit"})// можно убрать
+    //TOF-700
+    .Define("tof700Plane", TofHitPlane, {"BmnTof700Hit"})
+    .Define("tof700Strip", TofHitStrip, {"BmnTof700Hit"})
     .Define("tof700hitPos",tofHitPosition,{"BmnTof700Hit"})
     .Define("tof700hitT","BmnTof700Hit.fTimeStamp")
     .Define("tof700hitL","BmnTof700Hit.fLength")
     .Define("tof700hitResX","BmnTof700Hit.fResX")
     .Define("tof700hitResY","BmnTof700Hit.fResY")
     .Define("tof700hitRefIndex","BmnTof700Hit.fRefIndex")
-    .Define("tof700hitResCalc",tofRes,{"BmnGlobalTrack","BmnTof700Hit"})
-
+    //.Define("tof700hitResCalc",tofRes,{"BmnGlobalTrack","BmnTof700Hit"})// можно убрать
+    //beta and m2
+    .Define("trM2Tof400",trM2,{"trP","trBetaTof400"})
+    .Define("trM2Tof700",trM2,{"trP","trBetaTof700"})
+    .Define("trBetaTof400_clean", remove_beta400_from_bad_strips, {"trBetaTof400", "trTof400hit", "tof400Plane", "tof400Strip"})
+    .Define("trBetaTof700_clean", remove_beta700_from_bad_strips, {"trBetaTof700", "trTof700hit", "tof700Plane", "tof700Strip"})
+    .Define("trM2Tof400_clean", trM2, {"trP", "trBetaTof400_clean"})
+    .Define("trM2Tof700_clean", trM2, {"trP", "trBetaTof700_clean"})
+    .Define("trNsigma_211_400",nSigmaPID(f1_211_m_400,f1_211_s_400),{"trPq","trM2Tof400_clean"})
+    .Define("trNsigma_211_700",nSigmaPID(f1_211_m_700,f1_211_s_700),{"trPq","trM2Tof700_clean"})
+    .Define("trNsigma_211_700_proto",nSigmaPID(f1_211_m_700_proto,f1_211_s_700_proto),{"trPq","trM2Tof700_clean"})
+    .Define("trNsigma_2212_400",nSigmaPID(f1_2212_m_400,f1_2212_s_400),{"trPq","trM2Tof400_clean"})
+    .Define("trNsigma_2212_700",nSigmaPID(f1_2212_m_700,f1_2212_s_700),{"trPq","trM2Tof700_clean"})
+    .Define("trNsigma_1000010020_400",nSigmaPID(f1_1000010020_m_400,f1_1000010020_s_400),{"trPq","trM2Tof400_clean"})
+    .Define("trNsigma_1000010020_700",nSigmaPID(f1_1000010020_m_700,f1_1000010020_s_700),{"trPq","trM2Tof700_clean"})
+    //dEdx
+    .Define("trEnergyLoss", trEnergyLoss(run_id, is_physical_run), {"BmnGlobalTrack", "StsVector", "StsHit", "BmnGemLowerCluster", "BmnGemUpperCluster", "BmnSiliconLowerCluster", "BmnSiliconUpperCluster"})
+    //scwall
     .Define("scwallModPos",[scwallModPos](){return scwallModPos;})
     .Define("scwallModId",moduleId, {"scwallModPos"})
     .Define("scwallModQ", scwallModQ, {"ScWallEvent"})
-    
+    //hodo
     .Define("hodoModPos",[hodoModPos](){return hodoModPos;})
     .Define("hodoModId",moduleId, {"hodoModPos"})
-    .Define("hodoModQ", hodoModQ, {"HodoEvent"})
-    
+    .Define("hodoStripQ", hodoStripQ, {"HodoEvent"})
+    .Define("hodoSumQ", "float Sum{}; for( auto stripQ : hodoStripQ ){ Sum+=stripQ; } return Sum; " )
+    //fhcal
     .Define("fhcalModPos",[fhcalModPos](){return fhcalModPos;})
     .Define("fhcalModId", moduleId, {"fhcalModPos"})
     .Define("fhcalModE",fhcalModE,{"FHCalEvent"})
     .Define("fhcalSecE",fhcalSectionE,{"FHCalEvent"})
+    .Define("fhcalSumE", "float Sum{}; for( auto modE : fhcalModE ){ Sum+=modE; } return Sum; " )
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //for Centrality with Dim
+    .Define( "vtxXcorr", vtx_correction_generator(g1_FitVtxX), {"vtxX","runId"})
+    .Define( "vtxYcorr", vtx_correction_generator(g1_FitVtxY), {"vtxY","runId"})
+    .Define( "vtxZcorr", vtx_correction_generator(g1_FitVtxZ), {"vtxZ","runId"})
+    .Define( "vtxRcorr","return sqrt(vtxXcorr*vtxXcorr + vtxYcorr*vtxYcorr);" )
+    .Define( "bc1sIntegral_nSigma", bc1fd_nSigma(g1_m_FitBC1,g1_s_FitBC1), {"bc1sIntegral","runId"})
+    .Define( "fdIntegral_nSigma", bc1fd_nSigma(g1_m_FitFD,g1_s_FitFD), {"fdIntegral","runId"})
+    
 //    .Define("fdQ","Sum(FDPoint.fCharge*FDPoint.fCharge)")
 //    .Define("fdLight","Sum(FDPoint.fLightYield)")
 //    .Define("fdEloss", fdEloss, {"FDPoint"})
@@ -1564,4 +1567,53 @@ void convertBmn_run8(string inReco="reco.root", string inDigi="digi.root", strin
   dd.Snapshot("t", fileOut, definedNames);
 
   std::cout<<"Convert_done"<<std::endl;
+  timer1.Stop();
+  timer1.Print();
+}
+
+double Poly3Poly3(double* xx, double* pp)
+{
+      double threshold = pp[0];
+      double a_pol3 = pp[1];
+      double b_pol3 = pp[2];
+      double c_pol3 = pp[3];
+      double d_pol3 = pp[4];
+      double a_pol3_2 = pp[5];
+      double b_pol3_2 = pp[6];
+      double c_pol3_2 = pp[7];
+      double d_pol3_2 = pp[8];
+      
+      return xx[0] < threshold ? a_pol3*pow(xx[0],3) + b_pol3*pow(xx[0],2) + c_pol3*pow(xx[0],1) + d_pol3 : a_pol3_2*pow(xx[0],3) + b_pol3_2*pow(xx[0],2) + c_pol3_2*pow(xx[0],1) + d_pol3_2;
+}
+
+double SkewGaus(double* xx, double* pp)
+{
+    auto A = pp[0];
+    auto mean = pp[1];
+    auto sigma = pp[2];
+    auto alpha = pp[3];
+    auto norm = A / (sqrt(2. * TMath::Pi()) * sigma);
+    auto arg = (xx[0] - mean) / sigma;
+    auto phi = TMath::Gaus(arg, 0.0, 1.0, true);
+    auto Phi = 0.5 * (1 + std::erf(alpha * arg / std::sqrt(2)));
+    
+    return norm * phi * Phi;
+}
+
+double Poly3Gaus(double* xx, double* pp)
+{
+    double threshold = pp[0];
+    double amplitude = pp[1];
+    double mean = pp[2];
+    double sigma = pp[3];
+    double a_pol3 = pp[4];
+    double b_pol3 = pp[5];
+    double c_pol3 = pp[6];
+    double d_pol3 = pp[7];
+    double l = pp[8];
+    double norm = amplitude / (sqrt(2. * TMath::Pi()) * sigma);
+    double arg = (xx[0] - mean) / sigma;
+    double smallphi = TMath::Gaus(arg, 0.0, 1.0, true);
+
+    return xx[0] < threshold ? a_pol3*pow(xx[0],3) + b_pol3*pow(xx[0],2) + c_pol3*pow(xx[0],1) + d_pol3 : norm * smallphi + l;
 }
