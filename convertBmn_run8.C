@@ -1356,6 +1356,30 @@ void convertBmn_run8(string inReco="reco.root", string inDigi="digi.root",
       };
   };
 
+  auto RefMult_gt = [](float ptMin, float ptMax, float etaMin, float etaMax, float dcaRCut){ 
+    return [ptMin, ptMax, etaMin, etaMax, dcaRCut](RVecF tr_pt, RVecF tr_eta, RVecF tr_dca_r){
+      unsigned long Mult = 0;
+      for( int i=0; i<tr_pt.size(); ++i ){
+        if(tr_pt.at(i) < ptMin) continue;
+        if(tr_pt.at(i) > ptMax) continue;
+        if(tr_eta.at(i) < etaMin) continue;
+        if(tr_eta.at(i) > etaMax) continue;
+        if(tr_dca_r.at(i) > dcaRCut) continue;
+        Mult += 1;
+      }
+      return Mult;
+    };
+  };
+
+  auto RefMult_M = [](RVecF tr_pq){
+    unsigned long Mult = 0;
+    for( int i=0; i<tr_pq.size(); ++i ){
+      if(tr_pq.at(i) >= 0.) continue;
+      Mult += 1;
+    }
+    return Mult;
+  };  
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1423,7 +1447,7 @@ void convertBmn_run8(string inReco="reco.root", string inDigi="digi.root",
     .Define("bdModAmp", "BD.fAmp")
     .Define("bdTrigTime", "BD.fTime")
     .Define("siMDMult","BmnTrigInfo.fSiMDMult")
-    // Vertex
+    // Vertex MPD
     .Define("vtxX","MpdVertex.fX")
     .Define("vtxY","MpdVertex.fY")
     .Define("vtxZ","MpdVertex.fZ")
@@ -1436,6 +1460,7 @@ void convertBmn_run8(string inReco="reco.root", string inDigi="digi.root",
     .Define("trNhits","BmnGlobalTrack.fNhits")
     .Define("trNdf","BmnGlobalTrack.fNDF")
     .Define("trChi2","BmnGlobalTrack.fChi2")
+    .Define("trChi2Ndf","return trChi2/trNdf")
     .Define("trChi2vtx","BmnGlobalTrack.fChi2InVertex")
     .Define("trLength","BmnGlobalTrack.fLength")
     .Define("trP",trackP,{"BmnGlobalTrack"})
@@ -1475,7 +1500,7 @@ void convertBmn_run8(string inReco="reco.root", string inDigi="digi.root",
     .Define("beamTrackNDF", "BmnBeamTrack.fNDF")
     .Define("beamTrackB",   "BmnBeamTrack.fB")
     .Define("beamTrackParameters", BeamTrackParameters, { "BmnBeamTrack" })
-    //
+    //sts track
     .Define("stsTrackMomentum", stsTrackMomentum, { "BmnGlobalTrack", "StsVector" })
     .Define("stsTrackChi2Ndf", stsTrackChi2Ndf, { "BmnGlobalTrack", "StsVector" })
     .Define("stsTrackNdf", stsTrackNdf, { "BmnGlobalTrack", "StsVector" })
@@ -1534,12 +1559,18 @@ void convertBmn_run8(string inReco="reco.root", string inDigi="digi.root",
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //for Centrality with Dim
-    .Define( "vtxXcorr", vtx_correction_generator(g1_FitVtxX), {"vtxX","runId"})
-    .Define( "vtxYcorr", vtx_correction_generator(g1_FitVtxY), {"vtxY","runId"})
-    .Define( "vtxZcorr", vtx_correction_generator(g1_FitVtxZ), {"vtxZ","runId"})
-    .Define( "vtxRcorr","return sqrt(vtxXcorr*vtxXcorr + vtxYcorr*vtxYcorr);" )
-    .Define( "bc1sIntegral_nSigma", bc1fd_nSigma(g1_m_FitBC1,g1_s_FitBC1), {"bc1sIntegral","runId"})
-    .Define( "fdIntegral_nSigma", bc1fd_nSigma(g1_m_FitFD,g1_s_FitFD), {"fdIntegral","runId"})
+    // all ch track
+    .Define("track_multiplicity", "return trPq.size();")
+    .Define("track_multiplicity_gt", RefMult_gt(0.05,2.0,0.7,2.7,1),{"trPt","trEta","trDcaR"}) //0.05<pt<2 && 0.7<eta<2.7 && dca_R<1
+    .Define("track_multiplicity_gt2",RefMult_gt(0.05,2.0,0.7,2.7,3),{"trPt","trEta","trDcaR"}) //0.05<pt<2 && 0.7<eta<2.7 && dca_R<3
+    .Define("track_multiplicity_M", RefMult_M,{"trPq"})
+    //
+    .Define("vtxXcorr", vtx_correction_generator(g1_FitVtxX), {"vtxX","runId"})
+    .Define("vtxYcorr", vtx_correction_generator(g1_FitVtxY), {"vtxY","runId"})
+    .Define("vtxZcorr", vtx_correction_generator(g1_FitVtxZ), {"vtxZ","runId"})
+    .Define("vtxRcorr","return sqrt(vtxXcorr*vtxXcorr + vtxYcorr*vtxYcorr);" )
+    .Define("bc1sIntegral_nSigma", bc1fd_nSigma(g1_m_FitBC1,g1_s_FitBC1), {"bc1sIntegral","runId"})
+    .Define("fdIntegral_nSigma", bc1fd_nSigma(g1_m_FitFD,g1_s_FitFD), {"fdIntegral","runId"})
     //Cuts
     .Filter("vtxChi2Ndf > std::numeric_limits<float>::min()")
     .Filter("vtxNtracks >= 2")
