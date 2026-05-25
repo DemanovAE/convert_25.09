@@ -1,22 +1,35 @@
+#include "ROOT/RVec.hxx"
+#include "RtypesCore.h"
 #define BMNHYPNUCLPAIR_H
+
+#include <ROOT/RDataFrame.hxx>
+#include <Math/LorentzVector.h>
+#include <Math/PtEtaPhiE4D.h>
+#include <vector>
+#include <string>
+
 using namespace ROOT;
 using namespace ROOT::Math;
 using namespace ROOT::RDF;
+
+template<typename T>
+using vector1d_t = ROOT::VecOps::RVec<T>;
+template<typename T>
+using vector2d_t = ROOT::VecOps::RVec<vector1d_t<T>>;
+
+using vector1d_I = vector1d_t<Int_t>;
+using vector1d_U = vector1d_t<UInt_t>;
+using vector1d_S = vector1d_t<Short_t>;
+using vector1d_F = vector1d_t<Float_t>;
+using vector2d_F = vector2d_t<Float_t>;
+
 using fourVector=LorentzVector<PtEtaPhiE4D<double>>;
-using VecF2D = vector<vector<float>>;
-//using RVecMap = RVec<TMap<int,double>>;
-//vector<float> -> RVecF
-//vector Int
 
-double Poly3Poly3(double* xx, double* pp);
-double SkewGaus(double* xx, double* pp);
-double Poly3Gaus(double* xx, double* pp);
-
+// for dEdx
 std::vector<TGraph *> g1_a_lo_runid_vec;
 std::vector<TGraph *> g1_b_lo_runid_vec;
 std::vector<TGraph *> g1_a_up_runid_vec;
 std::vector<TGraph *> g1_b_up_runid_vec;
-
 TGraph *g1_a_lo_plane = nullptr;
 TGraph *g1_b_lo_plane = nullptr;
 TGraph *g1_a_up_plane = nullptr;
@@ -31,9 +44,55 @@ std::vector<int> physical_runs{6667, 6668, 6669, 6670, 6671, 6672, 6673, 6674, 6
 std::vector<int> bad_runs{7313, 7415, 7417, 7435, 7469, 7517, 7519, 7520, 7537, 7575, 7604, 7630, 7657, 7659, 7679, 7681, 7705, 7735, 7843, 7847, 7848, 7850, 7851, 7852, 7853, 7855, 7856, 7857, 7858, 7859, 7865, 7868, 7907, 7931, 7932, 7933, 7935, 7937, 7938, 7939, 7954, 7955, 8031, 8032, 8033, 8115, 8121, 8167, 8201, 8204, 8205, 8208, 8209, 8210, 8211, 8212, 8213, 8215, 8247, 8265, 8266, 8267, 8281, 8289};
 const std::vector<int> arrUsedHits_50{0, 0, 0, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11};
 
-
 BmnFieldMap* magField{nullptr};
 
+double Poly3Poly3(double* xx, double* pp){
+      double threshold = pp[0];
+      double a_pol3 = pp[1];
+      double b_pol3 = pp[2];
+      double c_pol3 = pp[3];
+      double d_pol3 = pp[4];
+      double a_pol3_2 = pp[5];
+      double b_pol3_2 = pp[6];
+      double c_pol3_2 = pp[7];
+      double d_pol3_2 = pp[8];
+      
+      return xx[0] < threshold ? a_pol3*pow(xx[0],3) + b_pol3*pow(xx[0],2) + c_pol3*pow(xx[0],1) + d_pol3 : a_pol3_2*pow(xx[0],3) + b_pol3_2*pow(xx[0],2) + c_pol3_2*pow(xx[0],1) + d_pol3_2;
+}
+
+double SkewGaus(double* xx, double* pp){
+    auto A = pp[0];
+    auto mean = pp[1];
+    auto sigma = pp[2];
+    auto alpha = pp[3];
+    auto norm = A / (sqrt(2. * TMath::Pi()) * sigma);
+    auto arg = (xx[0] - mean) / sigma;
+    auto phi = TMath::Gaus(arg, 0.0, 1.0, true);
+    auto Phi = 0.5 * (1 + std::erf(alpha * arg / std::sqrt(2)));
+    
+    return norm * phi * Phi;
+}
+
+double Poly3Gaus(double* xx, double* pp){
+    double threshold = pp[0];
+    double amplitude = pp[1];
+    double mean = pp[2];
+    double sigma = pp[3];
+    double a_pol3 = pp[4];
+    double b_pol3 = pp[5];
+    double c_pol3 = pp[6];
+    double d_pol3 = pp[7];
+    double l = pp[8];
+    double norm = amplitude / (sqrt(2. * TMath::Pi()) * sigma);
+    double arg = (xx[0] - mean) / sigma;
+    double smallphi = TMath::Gaus(arg, 0.0, 1.0, true);
+
+    return xx[0] < threshold ? a_pol3*pow(xx[0],3) + b_pol3*pow(xx[0],2) + c_pol3*pow(xx[0],1) + d_pol3 : norm * smallphi + l;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////data function/////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 TChain* makeChain(string& filename, const char* treename) {
   cout << "Adding files to chain:" << endl;
   TChain *chain = new TChain(treename);
@@ -47,115 +106,110 @@ TChain* makeChain(string& filename, const char* treename) {
   return chain;
 }
 
+//convert to RVec<Float_t> (vectro1d_F)
+vector1d_F ConvertToFloat_t(const RVec<double>& vec)
+try {
+  return vector1d_F(vec.begin(), vec.end());
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
+}
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////data function/////////////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // global track
-RVecF trackPq(const RVec<BmnGlobalTrack> tracks)
-try {
-  RVecF momenta;
-  for (auto track:tracks)
-    momenta.push_back(1./track.GetParamFirst()->GetQp());
-  return momenta;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+enum class TrackParamConvert { Pq, P, Pt, Phi, Eta};
+
+auto GlobalTrackParamFloat(TrackParamConvert param) {
+  return [param](const RVec<BmnGlobalTrack> tracks) -> vector1d_F {
+    vector1d_F result;
+    result.reserve(tracks.size());
+    
+    for (auto track:tracks) {
+      auto* par = track.GetParamFirst();
+      if (!par) {
+          result.push_back(-999.0f);
+          continue;
+      }
+      switch (param) {
+        case TrackParamConvert::Pq:
+          result.push_back(1.0 / par->GetQp());
+          break;
+        case TrackParamConvert::P:
+          result.push_back(std::abs(1.0 / par->GetQp()));
+          break;
+        case TrackParamConvert::Pt: {
+          TVector3 mom;
+          par->Momentum(mom);
+          result.push_back(mom.Pt());
+          break;
+        }
+        case TrackParamConvert::Phi: {
+          TVector3 mom;
+          par->Momentum(mom);
+          result.push_back(mom.Phi());
+          break;
+        }
+        case TrackParamConvert::Eta: {
+          TVector3 mom;
+          par->Momentum(mom);
+          result.push_back(mom.Eta());
+          break;
+        }
+      }
+    }
+    return result;
+  };
 }
 
-RVecF trackP(const RVec<BmnGlobalTrack> tracks)
+vector1d_S recCharge(const RVec<BmnGlobalTrack> tracks)
 try {
-  RVecF momenta;
-  for (auto track:tracks)
-    momenta.push_back(abs(1./track.GetParamFirst()->GetQp()));
-  return momenta;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
-}
-
-RVec<short> recCharge(const RVec<BmnGlobalTrack> tracks)
-try {
-  vector<short> charge;
+  vector1d_S charge;
   for (auto track:tracks) {
     int q = track.GetParamFirst()->GetQp() > 0 ? 1 : -1;
     charge.push_back(q);
   }
   return charge;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
-}
-
-RVecF trackPt(const RVec<BmnGlobalTrack> tracks)
-try {
-  RVecF momenta;
-  for (auto track:tracks) {
-    momenta.push_back(abs(track.GetPt()));
-  }   
-  return momenta;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
-}
-
-RVecF trackPhi(const RVec<BmnGlobalTrack> tracks)
-try {
-  RVecF momenta;
-  for (auto track:tracks) {
-    momenta.push_back(abs(track.GetPhi()));
-  }   
-  return momenta;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
-}
-
-RVecF trackEta(const RVec<BmnGlobalTrack> tracks)
-try {
-  RVecF momenta;
-  for (auto track:tracks) {
-    momenta.push_back(abs(track.GetEta()));
-  }   
-  return momenta;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
 //DCA gl tr
-const auto recDcaXYZR = [](std::string XYZR){
-  return [XYZR](const RVec<BmnGlobalTrack> tracks, const CbmVertex vtx){
-    RVecF dca;
+enum class DcaTypeConvert { X, Y, Z, R };
+
+const auto recDcaXYZR = [](DcaTypeConvert type) {
+  return [type](const RVec<BmnGlobalTrack> tracks, const CbmVertex vtx) {
+    vector1d_F dca;
     dca.reserve(tracks.size());
-    for (auto track:tracks) {
-      auto par = track.GetParamFirst();
-      if(!par){
+    
+    float vx = vtx.GetX();
+    float vy = vtx.GetY();
+    float vz = vtx.GetZ();
+    
+    for (auto track : tracks) {
+      auto* par = track.GetParamFirst();
+      if (!par) {
         dca.push_back(-999.0f);
         continue;
       }
-      auto x = par->GetX()-vtx.GetX();
-      auto y = par->GetY()-vtx.GetY();
-      auto z = par->GetZ()-vtx.GetZ();
-      auto r = std::sqrt( x*x + y*y );
-      if(XYZR=="X")
-        dca.push_back(x);
-      else if (XYZR=="Y")
-        dca.push_back(y);
-      else if (XYZR=="Z")
-        dca.push_back(z);
-      else if (XYZR=="R")
-        dca.push_back(r);
-      else
-        dca.push_back(-999.0f);
+      switch (type) {
+        case DcaTypeConvert::X: dca.push_back(par->GetX() - vx); break;
+        case DcaTypeConvert::Y: dca.push_back(par->GetY() - vy); break;
+        case DcaTypeConvert::Z: dca.push_back(par->GetZ() - vz); break;
+        case DcaTypeConvert::R: {
+          float dx = par->GetX() - vx;
+          float dy = par->GetY() - vy;
+          dca.push_back(std::hypot(dx, dy));
+          break;
+        }
+      }
     }
     return dca;
   };
 };
 
-VecF2D covMatrix(RVec<BmnGlobalTrack> global_tracks, RVec<CbmStsTrack> tracks)
+vector2d_F covMatrix(RVec<BmnGlobalTrack> global_tracks, RVec<CbmStsTrack> tracks)
 try {
-  VecF2D covariance_matrix;
+  vector2d_F covariance_matrix;
   for (auto& global_track : global_tracks) {
     auto idx = global_track.GetGemTrackIndex();
     auto track = tracks.at(idx);
@@ -171,14 +225,14 @@ try {
     // { c_00, c1[0..1], c2[0..2], ... c4[0..4] }
   }
   return covariance_matrix;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-VecF2D globalTrackCovMatrix(RVec<BmnGlobalTrack> global_tracks)
+vector2d_F globalTrackCovMatrix(RVec<BmnGlobalTrack> global_tracks)
 try {
-  VecF2D covariance_matrix;
+  vector2d_F covariance_matrix;
   for (auto& global_track : global_tracks) {
     auto* par = global_track.GetParamFirst();
     covariance_matrix.emplace_back();
@@ -192,9 +246,9 @@ try {
     // { c_00, c1[0..1], c2[0..2], ... c4[0..4] }
   }
   return covariance_matrix;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
 float determinant3x3( const std::array<std::array<float, 3>, 3>& matrix ) try {
@@ -203,9 +257,9 @@ float determinant3x3( const std::array<std::array<float, 3>, 3>& matrix ) try {
   auto x_2 = matrix[0][2] * ( matrix[1][0]*matrix[2][1] - matrix[1][1]*matrix[2][0]  );
 
   return x_0 - x_1 + x_2;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
 std::array<float, 3> cramerFieldSolver3x3( std::array<float, 3> field, std::array<float, 3> coordinate ) try {
@@ -234,14 +288,14 @@ std::array<float, 3> cramerFieldSolver3x3( std::array<float, 3> field, std::arra
   auto p2 = detA2 / detA;
 
   return {p0, p1, p2};
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-VecF2D magneticField(RVec<BmnGlobalTrack> global_tracks, RVec<CbmStsTrack> tracks, RVec<CbmStsHit> sts_hits)
+vector2d_F magneticField(RVec<BmnGlobalTrack> global_tracks, RVec<CbmStsTrack> tracks, RVec<CbmStsHit> sts_hits)
 try {
-  VecF2D magnetic_field;
+  vector2d_F magnetic_field;
   for (auto& global_track : global_tracks ) {
 
     auto idx = global_track.GetGemTrackIndex();
@@ -282,14 +336,14 @@ try {
     magnetic_field.back().push_back( 0.0 ); // z0
   }
   return magnetic_field;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-VecF2D stsTrackParameters(RVec<BmnGlobalTrack> global_tracks, RVec<CbmStsTrack> tracks)
+vector2d_F stsTrackParameters(RVec<BmnGlobalTrack> global_tracks, RVec<CbmStsTrack> tracks)
 try {
-  VecF2D parameters;
+  vector2d_F parameters;
   for (auto& global_track : global_tracks) {
     auto idx = global_track.GetGemTrackIndex();
     auto track = tracks.at(idx);
@@ -304,14 +358,14 @@ try {
     parameters.back().push_back( par->GetQp() );
   }
   return parameters;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-VecF2D globalTrackParameters(RVec<BmnGlobalTrack> global_tracks)
+vector2d_F globalTrackParameters(RVec<BmnGlobalTrack> global_tracks)
 try {
-  VecF2D parameters;
+  vector2d_F parameters;
   for (auto& global_track : global_tracks) {
     auto* par = global_track.GetParamFirst();
     parameters.emplace_back();
@@ -323,14 +377,14 @@ try {
     parameters.back().push_back( par->GetQp() );
   }
   return parameters;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-VecF2D trParamFirst(RVec<BmnGlobalTrack> global_tracks)
+vector2d_F trParamFirst(RVec<BmnGlobalTrack> global_tracks)
 try {
-  VecF2D parameters;
+  vector2d_F parameters;
   for (auto& global_track : global_tracks) {
     auto* par = global_track.GetParamFirst();
     parameters.emplace_back();
@@ -342,14 +396,14 @@ try {
     parameters.back().push_back( par->GetQp() );
   }
   return parameters;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-VecF2D trParamLast(RVec<BmnGlobalTrack> global_tracks)
+vector2d_F trParamLast(RVec<BmnGlobalTrack> global_tracks)
 try {
-  vector<vector<float>> parameters;
+  vector2d_F parameters;
   for (auto& global_track : global_tracks) {
     auto* par = global_track.GetParamLast();
     parameters.emplace_back();
@@ -361,14 +415,14 @@ try {
     parameters.back().push_back( par->GetQp() );
   }
   return parameters;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-VecF2D BeamTrackParameters(RVec<BmnTrack> beam_tracks)
+vector2d_F BeamTrackParameters(RVec<BmnTrack> beam_tracks)
 try {
-  VecF2D parameters;
+  vector2d_F parameters;
   for (auto& beam_track : beam_tracks) {
     auto *par = beam_track.GetParamLast();
     parameters.emplace_back();
@@ -380,9 +434,9 @@ try {
     parameters.back().push_back( par->GetQp() );
   }
   return parameters;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
 vector<fourVector> stsTrackMomentum(RVec<BmnGlobalTrack> global_tracks, RVec<CbmStsTrack> tracks)
@@ -397,14 +451,14 @@ try {
     momenta.push_back({mom.Pt(),mom.Eta(),mom.Phi(),0});
   }
   return momenta;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-RVec<float> stsTrackChi2Ndf(RVec<BmnGlobalTrack> global_tracks, RVec<CbmStsTrack> tracks)
+vector1d_F stsTrackChi2Ndf(RVec<BmnGlobalTrack> global_tracks, RVec<CbmStsTrack> tracks)
 try {
-  RVec<float> vec_chi2;
+  vector1d_F vec_chi2;
   for (auto& global_track : global_tracks) {
     auto idx = global_track.GetGemTrackIndex();
     auto track = tracks.at(idx);
@@ -415,9 +469,9 @@ try {
     vec_chi2.push_back( chi2/ndf );
   }
   return vec_chi2;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
 RVec<int> stsTrackNdf(RVec<BmnGlobalTrack> global_tracks, RVec<CbmStsTrack> tracks)
@@ -432,9 +486,9 @@ try {
     vec_ndf.push_back( ndf );
   }
   return vec_ndf;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
 RVec<int> stsTrackNhits(RVec<BmnGlobalTrack> global_tracks, RVec<CbmStsTrack> tracks)
@@ -449,9 +503,9 @@ try {
     vec_ndf.push_back( ndf );
   }
   return vec_ndf;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
 /// BeamHit
@@ -462,31 +516,31 @@ try {
     pos.push_back({track.GetX(), track.GetY(), track.GetZ()});
   }
   return pos;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-RVec<float> beamHitStation(const RVec<BmnSiBTHit> tracks)
+vector1d_I beamHitStation(const RVec<BmnSiBTHit> tracks)
 try {
-  vector<float> _station;
+  vector1d_I _station;
   for (auto track:tracks)
     _station.push_back(track.GetStation());
   return _station;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-RVec<float> beamHitIndex(const RVec<BmnSiBTHit> tracks)
+vector1d_I beamHitIndex(const RVec<BmnSiBTHit> tracks)
 try {
-  vector<float> _index;
+  vector1d_I _index;
   for (auto track:tracks)
     _index.push_back(track.GetIndex());
   return _index;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
 vector<XYZVector> recPosLast(const RVec<BmnGlobalTrack> tracks)
@@ -497,16 +551,16 @@ try {
     pos.push_back({par->GetX(), par->GetY(), par->GetZ()});
   }
   return pos;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-auto TofHitPlane(const RVec<BmnTofHit>& tofHits)
+vector1d_I TofHitPlane(const RVec<BmnTofHit>& tofHits)
 try
 {
   // print.qf()
-  RVec<int> hit_mod_num;
+  vector1d_I hit_mod_num;
   hit_mod_num.reserve(tofHits.size());
   for( const auto& hit : tofHits )
   {
@@ -514,17 +568,15 @@ try
     hit_mod_num.push_back(mod);
   }
   return hit_mod_num;
-}
-catch(const std::exception &e)
-{
-    std::cout << __func__ << std::endl;
-    throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-auto TofHitStrip(const RVec<BmnTofHit>& tofHits)
+vector1d_I TofHitStrip(const RVec<BmnTofHit>& tofHits)
 try
 {
-  RVec<int> hit_strip_num;
+  vector1d_I hit_strip_num;
   hit_strip_num.reserve(tofHits.size());
   for( const auto& hit : tofHits )
   {
@@ -532,49 +584,41 @@ try
     hit_strip_num.push_back(strip);
   }
   return hit_strip_num;
-}
-catch(const std::exception &e)
-{
-    std::cout << __func__ << std::endl;
-    throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
 
 //=========== debug functions ==================
-auto trTofHitPlane(const RVec<int> fHitIndex, const vector<int>& tofHits)
+vector1d_I trTofHitPlane(const RVec<int> fHitIndex, const vector<int>& tofHits)
 try
 {
-  RVec<int> hit_mod_num(fHitIndex.size(), -1);
+  vector1d_I hit_mod_num(fHitIndex.size(), -1);
   for(int i = 0; i < fHitIndex.size(); ++i)
   {
     if (fHitIndex.at(i) < 0) continue;
     hit_mod_num.at(i) = tofHits.at(fHitIndex.at(i));
   }
   return hit_mod_num;
-}
-catch(const std::exception &e)
-{
-    std::cout << __func__ << std::endl;
-    std::cout << e.what() << std::endl;
-    throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-auto trTofHitStrip(const RVec<int> fHitIndex, const vector<int>& tofHits)
+vector1d_I trTofHitStrip(const RVec<int> fHitIndex, const vector<int>& tofHits)
 try
 {
-  RVec<int> hit_strip_num(fHitIndex.size(), -1);
+  vector1d_I hit_strip_num(fHitIndex.size(), -1);
   for(int i = 0; i < fHitIndex.size(); ++i)
   {
     if (fHitIndex.at(i) < 0) continue;
     hit_strip_num.at(i) = tofHits.at(fHitIndex.at(i));
   }
   return hit_strip_num;
-}
-catch(const std::exception &e)
-{
-    std::cout << __func__ << std::endl;
-    std::cout << e.what() << std::endl;
-    throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 //=================================================
 
@@ -592,9 +636,9 @@ try {
   for (auto track:tracks) 
     pos.push_back(ExtrapolateStraightLine(track.GetParamLast(), 450));
   return pos;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
 vector<XYZVector> tofHitPosition(const TClonesArray hits)
@@ -605,9 +649,9 @@ try {
     pos.push_back({hit->GetX(),hit->GetY(),hit->GetZ()});
   }
   return pos;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
 vector<XYZVector> tofRes(const RVec<BmnGlobalTrack> tracks, const TClonesArray hits)
@@ -637,20 +681,20 @@ try {
     }
   }
   return res;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-RVec<int> moduleId (const vector<XYZVector> modulePos)
+vector1d_I moduleId (const vector<XYZVector> modulePos)
 try {
-  RVec<int> moduleIds;
+  vector1d_I moduleIds;
   for (int i=0;i<modulePos.size();i++)
     moduleIds.push_back(i+1);
   return moduleIds;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
 vector<XYZVector> modulePos (const char *geoFile, const char *detectorTag)
@@ -721,75 +765,75 @@ try {
       printf("%d: (%f, %f, %f)\n", i, modulePosVector.at(i).x(), modulePosVector.at(i).y(), modulePosVector.at(i).z());
   }
   return modulePosVector;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
 // FHCal
-RVec<float> fhcalModE(BmnFHCalEvent event)
+vector1d_F fhcalModE(BmnFHCalEvent event)
 try {
-  RVec<float> fhcalModEnergy_;
+  vector1d_F fhcalModEnergy_;
   for (int i = 0; i < 54; i++)
-    fhcalModEnergy_.push_back(event.GetModule(i+1)->GetEnergy() * 0.005); // *0.005: mip -> GeV
+    fhcalModEnergy_.push_back(event.GetModule(i+1)->GetEnergy()); // *0.005: mip -> GeV
   return fhcalModEnergy_;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-VecF2D fhcalSectionE(BmnFHCalEvent event)
+vector2d_F fhcalSectionE(BmnFHCalEvent event)
 try {
-  VecF2D fhcalSecEnergy_;
+  vector2d_F fhcalSecEnergy_;
   for (Int_t iModule = 1; iModule <= event.GetTotalModules(); iModule++)
   {
     BmnFHCalModule* module = event.GetModule(iModule);
     fhcalSecEnergy_.emplace_back();
     for (Int_t iSect = 1; iSect <= module->GetNsections(); iSect++)
     {
-      fhcalSecEnergy_.back().push_back(module->GetSectionEnergy(iSect) * 0.005); // *0.005: mip -> GeV
+      fhcalSecEnergy_.back().push_back(module->GetSectionEnergy(iSect)); // *0.005: mip -> GeV
     }
   }
   return fhcalSecEnergy_;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-RVec<float> scwallModQ(BmnScWallEvent event)
+vector1d_F scwallModQ(BmnScWallEvent event)
 try {
-  RVec<float> scwallModCharge_;
+  vector1d_F scwallModCharge_;
   for (int i = 0; i < 174; i++)
     scwallModCharge_.push_back(event.GetCell(i+1)->GetSignal());
   return scwallModCharge_;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-RVec<float> hodoStripQ(BmnHodoEvent event)
+vector1d_F hodoStripQ(BmnHodoEvent event)
 try {
-  RVec<float> hodoStripCharge_;
+  vector1d_F hodoStripCharge_;
   for (int i = 0; i < 16; i++)
     hodoStripCharge_.push_back(event.GetStrip(i+1)->GetSignal());
   return hodoStripCharge_;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-RVec<float> getEloss(const RVec<int> moduleId, const RVec<double> eLossDigis, const vector<XYZVector> modulePos)
+vector1d_F getEloss(const RVec<int> moduleId, const RVec<double> eLossDigis, const vector<XYZVector> modulePos)
 try {
   int nModules=modulePos.size();
-  RVec<float> eLossModules(nModules,0);
+  vector1d_F eLossModules(nModules,0);
   int nDigis=eLossDigis.size();
   for(int i=0;i<nDigis;i++)
     if(moduleId.at(i) <= nModules)
       eLossModules.at(moduleId.at(i)-1)=eLossDigis.at(i);
   return eLossModules;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
 RVec<bool> hasHitFhcal (RVec<CbmMCTrack> particles)
@@ -811,61 +855,61 @@ RVec<short> modNhits (RVec<short> digiModIds, RVec<short> pointModIds)
 }
 
 
-int trigNSamples(const RVec<BmnTrigWaveDigit> trigger)
+Int_t trigNSamples(const RVec<BmnTrigWaveDigit> trigger)
 try {
   return (trigger.at(0)).GetNSamples();
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-float trigIntegral(const RVec<BmnTrigWaveDigit> trigger)
+Float_t trigIntegral(const RVec<BmnTrigWaveDigit> trigger)
 try {
   return (trigger.at(0)).GetIntegral(); // 
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-float trigAmp(const RVec<BmnTrigWaveDigit> trigger)
+Float_t trigAmp(const RVec<BmnTrigWaveDigit> trigger)
 try {
   return (trigger.at(0)).GetPeak();
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-float trigTime(const RVec<BmnTrigWaveDigit> trigger)
+Float_t trigTime(const RVec<BmnTrigWaveDigit> trigger)
 try {
   return (trigger.at(0)).GetTime();
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-RVec<double> trigTdcTimes(const TClonesArray trigger)
+vector1d_t<Double_t> trigTdcTimes(const TClonesArray trigger)
 try {
   return ((BmnTrigWaveDigit*)trigger.At(0))->TdcVector();
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-RVec<short> trigValues(const RVec<BmnTrigWaveDigit> trigger)
+vector1d_S trigValues(const RVec<BmnTrigWaveDigit> trigger)
 try {
   vector<short>values;
   short* triggerValues = (trigger.at(0)).GetShortValue();
   for (int i = 0; i < 450; i++)
     values.push_back(triggerValues[i]);
   return values;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-RVec<double> remove_beta400_from_bad_strips(const RVec<double> fBeta, const RVec<int> fHitIndex, const RVec<int> fPlane, const RVec<int> fStrip)
+vector1d_F remove_beta400_from_bad_strips(const vector1d_F fBeta, const RVec<int> fHitIndex, const RVec<int> fPlane, const RVec<int> fStrip)
 try{
-  RVec<double> fBetaClean_(fBeta);
+  vector1d_F fBetaClean_(fBeta);
   for( int i = 0; i <  fHitIndex.size(); i++){
     auto hit_idx = fHitIndex.at(i);
       if (hit_idx < 0 ) continue;
@@ -877,15 +921,14 @@ try{
       }
   }
     return fBetaClean_;
-} catch( const std::exception& e ){
-  std::cout << e.what() << std::endl;
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-RVec<double> remove_beta700_from_bad_strips(const RVec<double> fBeta, const RVec<int> fHitIndex, const RVec<int> fPlane, const RVec<int> fStrip)
+vector1d_F remove_beta700_from_bad_strips(const vector1d_F fBeta, const RVec<int> fHitIndex, const RVec<int> fPlane, const RVec<int> fStrip)
 try{
-  RVec<double> fBetaClean_(fBeta);
+  vector1d_F fBetaClean_(fBeta);
   for( int i = 0; i <  fHitIndex.size(); i++){
     auto hit_idx = fHitIndex.at(i);
       if (hit_idx < 0 ) continue;
@@ -897,16 +940,15 @@ try{
       }
   }
     return fBetaClean_;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  std::cout << e.what() << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
 // m2
-RVec<float> trM2(const RVecF mTr, const RVec<double> fBeta)
+vector1d_F trM2(const RVecF mTr, const vector1d_F fBeta)
 try {
-  RVec<float> trM2_;
+  vector1d_F trM2_;
   for (int itr=0; itr<mTr.size(); itr++) {
     auto p = mTr.at(itr);
     auto p2 = p*p;
@@ -917,14 +959,14 @@ try {
     trM2_.push_back(m2);
   }
   return trM2_;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 // nSigma PID
 const auto nSigmaPID = [](TF1* f1_mean, TF1* f1_sigma){
   return [f1_mean,f1_sigma](const RVecF vec_pq, const RVecF vec_m2){
-    RVecF vec_n_sigma;
+    vector1d_F vec_n_sigma;
     vec_n_sigma.reserve( vec_pq.size() );
     for( size_t i=0; i < vec_pq.size(); ++i ){
       auto m2 = vec_m2.at(i);
@@ -939,9 +981,10 @@ const auto nSigmaPID = [](TF1* f1_mean, TF1* f1_sigma){
 };
 
 //dEdx from Irina
+//dEdx from Irina
 auto CalcEnergyLoss(const std::vector<std::vector<float>>& clusters_vec)
 {
-    std::vector<float> dedx;
+    vector1d_F dedx;
     dedx.reserve(clusters_vec.size());
     for (int i = 0; i < clusters_vec.size(); i++)
     {
@@ -978,7 +1021,7 @@ const auto trEnergyLoss = [](int run_id, bool is_physical=false)
     {
         int size = glTracks.size();
         if (size == 0)
-            return std::vector<float>{};
+            return vector1d_F{};
 
         std::vector<std::vector<float>> cluster_signal_vec;
 
@@ -1042,62 +1085,73 @@ const auto trEnergyLoss = [](int run_id, bool is_physical=false)
 int CentralHitIndexBC1S(BmnBC1hitInfo hit)
 try {
   return hit.GetCentralHitIndexBC1S();
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
 int BC1hitClasses(BmnBC1hitInfo hit, int centralHitIndex)
 try {
   if(centralHitIndex<0)return -1;
   return hit.GetBC1hitClasses().at(centralHitIndex)==BmnEventClass::k1;
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-std::vector<float> ClosestBC1hitsDt_k0(BmnBC1hitInfo hit)
+vector1d_F ClosestBC1hitsDt(BmnBC1hitInfo hit)
+try {
+
+  return hit.GetClosestBC1hitsDt(BmnEventClass::k0);
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
+}
+
+vector1d_F ClosestBC1hitsDt_k0(BmnBC1hitInfo hit)
 try {
   return hit.GetClosestBC1hitsDt(BmnEventClass::k0);
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-std::vector<float> ClosestBC1hitsDt_kV0(BmnBC1hitInfo hit)
+vector1d_F ClosestBC1hitsDt_kV0(BmnBC1hitInfo hit)
 try {
   return hit.GetClosestBC1hitsDt(BmnEventClass::kV0);
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-std::vector<float> ClosestBC1hitsDt_k1(BmnBC1hitInfo hit)
+vector1d_F ClosestBC1hitsDt_k1(BmnBC1hitInfo hit)
 try {
   return hit.GetClosestBC1hitsDt(BmnEventClass::k1);
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
-std::vector<float> ClosestBC1hitsDt_kV1(BmnBC1hitInfo hit)
+vector1d_F ClosestBC1hitsDt_kV1(BmnBC1hitInfo hit)
 try {
   return hit.GetClosestBC1hitsDt(BmnEventClass::kV1);
-} catch( const std::exception& e ){
-  std::cout << __func__ << std::endl;
-  throw e;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
 }
 
 
 // root -l -q -b convertBmn_run8.C'("/eos/nica/bmn/exp/dst/run8/25.09.0/mpd_run_Top_8130_ev0_p6.root","/eos/nica/bmn/exp/dst/run8/25.09.0/mpd_run_Top_8130_ev0_p6.root")'
 
 // main functions
-void convertBmn_run8(string inReco="reco.root", string inDigi="digi.root", 
-                     string inRunidDedxCalib = "run8_dedx_calibR_coeff.root", string inStsStationDedxCalib = "run8_dedx_calibS_coeff.root",
+void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.root", 
+                     std::string inRunidDedxCalib = "run8_dedx_calibR_coeff.root", std::string inStsStationDedxCalib = "run8_dedx_calibS_coeff.root",
                      std::string fileOut = "out.tree.root",
-                     string str_pid400_functions_file = "pars400_25.04.root", string str_pid700_functions_file = "pars700_25.04.root")
+                     std::string str_pid400_functions_file = "pars400_25.04.root", std::string str_pid700_functions_file = "pars700_25.04.root")
 {
   
+  gInterpreter->GenerateDictionary("ROOT::RVec<ROOT::RVec<float>>", "ROOT/RVec.hxx");
+
   TStopwatch timer1;
   timer1.Start();
 
@@ -1343,8 +1397,8 @@ void convertBmn_run8(string inReco="reco.root", string inDigi="digi.root",
   
   //cirrections functions
   auto vtx_correction_generator = []( TGraphErrors* g1_calib ){
-      return [g1_calib](double _val, UInt_t _runId){
-        return _val - (g1_calib!=nullptr ? g1_calib->Eval( static_cast<double>(_runId)) : 0.);
+      return [g1_calib](float _val, UInt_t _runId){
+        return (Float_t) (_val - (g1_calib!=nullptr ? g1_calib->Eval( static_cast<double>(_runId)) : 0.) );
       };
   };
 
@@ -1386,9 +1440,6 @@ void convertBmn_run8(string inReco="reco.root", string inDigi="digi.root",
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
 
 
   auto dd=d
@@ -1448,36 +1499,49 @@ void convertBmn_run8(string inReco="reco.root", string inDigi="digi.root",
     .Define("bdTrigTime", "BD.fTime")
     .Define("siMDMult","BmnTrigInfo.fSiMDMult")
     // Vertex MPD
-    .Define("vtxX","MpdVertex.fX")
-    .Define("vtxY","MpdVertex.fY")
-    .Define("vtxZ","MpdVertex.fZ")
+    .Define("vtxX","(Float_t)MpdVertex.fX")
+    .Define("vtxY","(Float_t)MpdVertex.fY")
+    .Define("vtxZ","(Float_t)MpdVertex.fZ")
     .Define("vtxR","return sqrt(vtxX*vtxX + vtxY*vtxY);" )
     .Define("vtxNtracks","MpdVertex.fNTracks")
-    .Define("vtxChi2","MpdVertex.fChi2")
+    .Define("vtxChi2","(Float_t)MpdVertex.fChi2")
     .Define("vtxNdf","MpdVertex.fNDF")
-    .Define("vtxChi2Ndf","return MpdVertex.fChi2/MpdVertex.fNDF")
+    .Define("vtxChi2Ndf","return (Float_t)MpdVertex.fChi2/MpdVertex.fNDF")
+    // Vertex PV
+    .Define("vtxPvX","(Float_t)PrimaryVertex.fX")
+    .Define("vtxPvY","(Float_t)PrimaryVertex.fY")
+    .Define("vtxPvZ","(Float_t)PrimaryVertex.fZ")
+    .Define("vtxPvR","return sqrt(vtxX*vtxX + vtxY*vtxY);" )
+    .Define("vtxPvNtracks","PrimaryVertex.fNTracks")
+    .Define("vtxPvChi2","(Float_t)PrimaryVertex.fChi2")
+    .Define("vtxPvNdf","PrimaryVertex.fNDF")
+    .Define("vtxPvChi2Ndf","return (Float_t)PrimaryVertex.fChi2/PrimaryVertex.fNDF")
     //global tracks    
     .Define("trNhits","BmnGlobalTrack.fNhits")
     .Define("trNdf","BmnGlobalTrack.fNDF")
     .Define("trChi2","BmnGlobalTrack.fChi2")
     .Define("trChi2Ndf","return trChi2/trNdf")
-    .Define("trChi2vtx","BmnGlobalTrack.fChi2InVertex")
-    .Define("trLength","BmnGlobalTrack.fLength")
-    .Define("trP",trackP,{"BmnGlobalTrack"})
-    .Define("trPq",trackPq,{"BmnGlobalTrack"})
+    .Define("trChi2vtx",ConvertToFloat_t,{"BmnGlobalTrack.fChi2InVertex"})
+    .Define("trLength","BmnGlobalTrack.fLength")    
+    .Define("trP",GlobalTrackParamFloat(TrackParamConvert::P),{"BmnGlobalTrack"})
+    .Define("trPq",GlobalTrackParamFloat(TrackParamConvert::Pq),{"BmnGlobalTrack"})
+    .Define("trPt",GlobalTrackParamFloat(TrackParamConvert::Pt),{"BmnGlobalTrack"})
+    .Define("trEta",GlobalTrackParamFloat(TrackParamConvert::Eta),{"BmnGlobalTrack"})
+    .Define("trPhi",GlobalTrackParamFloat(TrackParamConvert::Phi),{"BmnGlobalTrack"})
     .Define("trCharge",recCharge,{"BmnGlobalTrack"})
-    .Define("trPt",trackPt,{"BmnGlobalTrack"})
-    .Define("trEta",trackEta,{"BmnGlobalTrack"})
-    .Define("trPhi",trackPhi,{"BmnGlobalTrack"})
-    .Define("trDcaX",recDcaXYZR("X"),{"BmnGlobalTrack","MpdVertex."})
-    .Define("trDcaY",recDcaXYZR("Y"),{"BmnGlobalTrack","MpdVertex."})
-    .Define("trDcaZ",recDcaXYZR("Z"),{"BmnGlobalTrack","MpdVertex."})
-    .Define("trDcaR",recDcaXYZR("R"),{"BmnGlobalTrack","MpdVertex."})
+    .Define("trDcaX",recDcaXYZR(DcaTypeConvert::X),{"BmnGlobalTrack","MpdVertex."})
+    .Define("trDcaY",recDcaXYZR(DcaTypeConvert::Y),{"BmnGlobalTrack","MpdVertex."})
+    .Define("trDcaZ",recDcaXYZR(DcaTypeConvert::Z),{"BmnGlobalTrack","MpdVertex."})
+    .Define("trDcaR",recDcaXYZR(DcaTypeConvert::R),{"BmnGlobalTrack","MpdVertex."})
+    .Define("trDcaXPv",recDcaXYZR(DcaTypeConvert::X),{"BmnGlobalTrack","PrimaryVertex."})
+    .Define("trDcaYPv",recDcaXYZR(DcaTypeConvert::Y),{"BmnGlobalTrack","PrimaryVertex."})
+    .Define("trDcaZPv",recDcaXYZR(DcaTypeConvert::Z),{"BmnGlobalTrack","PrimaryVertex."})
+    .Define("trDcaRPv",recDcaXYZR(DcaTypeConvert::R),{"BmnGlobalTrack","PrimaryVertex."})
     //TOF
     .Define("trTof400hit","BmnGlobalTrack.fTof1Hit")
     .Define("trTof700hit","BmnGlobalTrack.fTof2Hit")
-    .Define("trBetaTof400","BmnGlobalTrack.fBeta400")
-    .Define("trBetaTof700","BmnGlobalTrack.fBeta700")
+    .Define("trBetaTof400",ConvertToFloat_t,{"BmnGlobalTrack.fBeta400"})
+    .Define("trBetaTof700",ConvertToFloat_t,{"BmnGlobalTrack.fBeta700"})
     //digits info        
     .Define("gemDigits","GEM.fUniqueID")
     .Define("fsdDigits","SILICON.fUniqueID")
@@ -1562,6 +1626,7 @@ void convertBmn_run8(string inReco="reco.root", string inDigi="digi.root",
     // all ch track
     .Define("track_multiplicity", "return trPq.size();")
     .Define("track_multiplicity_gt", RefMult_gt(0.05,2.0,0.7,2.7,1),{"trPt","trEta","trDcaR"}) //0.05<pt<2 && 0.7<eta<2.7 && dca_R<1
+    .Define("track_multiplicity_gt_pv", RefMult_gt(0.05,2.0,0.7,2.7,1),{"trPt","trEta","trDcaRPv"}) //0.05<pt<2 && 0.7<eta<2.7 && dca_R<1
     .Define("track_multiplicity_gt2",RefMult_gt(0.05,2.0,0.7,2.7,3),{"trPt","trEta","trDcaR"}) //0.05<pt<2 && 0.7<eta<2.7 && dca_R<3
     .Define("track_multiplicity_M", RefMult_M,{"trPq"})
     //
@@ -1569,13 +1634,17 @@ void convertBmn_run8(string inReco="reco.root", string inDigi="digi.root",
     .Define("vtxYcorr", vtx_correction_generator(g1_FitVtxY), {"vtxY","runId"})
     .Define("vtxZcorr", vtx_correction_generator(g1_FitVtxZ), {"vtxZ","runId"})
     .Define("vtxRcorr","return sqrt(vtxXcorr*vtxXcorr + vtxYcorr*vtxYcorr);" )
+    .Define("vtxPvXcorr", vtx_correction_generator(g1_FitVtxX), {"vtxPvX","runId"})
+    .Define("vtxPvYcorr", vtx_correction_generator(g1_FitVtxY), {"vtxPvY","runId"})
+    .Define("vtxPvZcorr", vtx_correction_generator(g1_FitVtxZ), {"vtxPvZ","runId"})
+    .Define("vtxPvRcorr","return sqrt(vtxPvXcorr*vtxPvXcorr + vtxPvYcorr*vtxPvYcorr);" )
     .Define("bc1sIntegral_nSigma", bc1fd_nSigma(g1_m_FitBC1,g1_s_FitBC1), {"bc1sIntegral","runId"})
     .Define("fdIntegral_nSigma", bc1fd_nSigma(g1_m_FitFD,g1_s_FitFD), {"fdIntegral","runId"})
     //Cuts
-    .Filter("vtxChi2Ndf > std::numeric_limits<float>::min()")
-    .Filter("vtxNtracks >= 2")
-    .Filter("vtxRcorr < 1.")
-    .Filter("vtxZcorr < 1.")
+    //.Filter("vtxChi2Ndf > std::numeric_limits<float>::min()")
+    //.Filter("vtxNtracks >= 2")
+    //.Filter("vtxRcorr < 1.")
+    //.Filter("vtxZcorr < 1.")
 //    .Define("fdQ","Sum(FDPoint.fCharge*FDPoint.fCharge)")
 //    .Define("fdLight","Sum(FDPoint.fLightYield)")
 //    .Define("fdEloss", fdEloss, {"FDPoint"})
@@ -1596,59 +1665,14 @@ void convertBmn_run8(string inReco="reco.root", string inDigi="digi.root",
     for (auto &nameToExclude:toExclude)
       if (definedName==nameToExclude)
         exclude=true;
-    if (!exclude)
+    if (!exclude){
       definedNames.push_back(definedName);
+      //std::cout<<"Column name: "<< std::left << std::setw(30)<<definedName<<"Type: "<< std::left << std::setw(50) << dd.GetColumnType(definedName) << std::endl;
+    }
   }
   dd.Snapshot("t", fileOut, definedNames);
 
   std::cout<<"Convert_done"<<std::endl;
   timer1.Stop();
   timer1.Print();
-}
-
-double Poly3Poly3(double* xx, double* pp)
-{
-      double threshold = pp[0];
-      double a_pol3 = pp[1];
-      double b_pol3 = pp[2];
-      double c_pol3 = pp[3];
-      double d_pol3 = pp[4];
-      double a_pol3_2 = pp[5];
-      double b_pol3_2 = pp[6];
-      double c_pol3_2 = pp[7];
-      double d_pol3_2 = pp[8];
-      
-      return xx[0] < threshold ? a_pol3*pow(xx[0],3) + b_pol3*pow(xx[0],2) + c_pol3*pow(xx[0],1) + d_pol3 : a_pol3_2*pow(xx[0],3) + b_pol3_2*pow(xx[0],2) + c_pol3_2*pow(xx[0],1) + d_pol3_2;
-}
-
-double SkewGaus(double* xx, double* pp)
-{
-    auto A = pp[0];
-    auto mean = pp[1];
-    auto sigma = pp[2];
-    auto alpha = pp[3];
-    auto norm = A / (sqrt(2. * TMath::Pi()) * sigma);
-    auto arg = (xx[0] - mean) / sigma;
-    auto phi = TMath::Gaus(arg, 0.0, 1.0, true);
-    auto Phi = 0.5 * (1 + std::erf(alpha * arg / std::sqrt(2)));
-    
-    return norm * phi * Phi;
-}
-
-double Poly3Gaus(double* xx, double* pp)
-{
-    double threshold = pp[0];
-    double amplitude = pp[1];
-    double mean = pp[2];
-    double sigma = pp[3];
-    double a_pol3 = pp[4];
-    double b_pol3 = pp[5];
-    double c_pol3 = pp[6];
-    double d_pol3 = pp[7];
-    double l = pp[8];
-    double norm = amplitude / (sqrt(2. * TMath::Pi()) * sigma);
-    double arg = (xx[0] - mean) / sigma;
-    double smallphi = TMath::Gaus(arg, 0.0, 1.0, true);
-
-    return xx[0] < threshold ? a_pol3*pow(xx[0],3) + b_pol3*pow(xx[0],2) + c_pol3*pow(xx[0],1) + d_pol3 : norm * smallphi + l;
 }
