@@ -1665,7 +1665,7 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
     //.Filter("vtxChi2Ndf > std::numeric_limits<float>::min()")
     //.Filter("vtxNtracks >= 2")
     //.Filter("vtxRcorr < 1.")
-    //.Filter("vtxZcorr < 1.")
+    //.Filter("abs(vtxZcorr) < 1.")
     //.Filter("noPileup==1")
 //    .Define("fdQ","Sum(FDPoint.fCharge*FDPoint.fCharge)")
 //    .Define("fdLight","Sum(FDPoint.fLightYield)")
