@@ -341,6 +341,15 @@ try {
   throw;
 }
 
+Int_t GetNHits_Convert(const TClonesArray& hits)
+try {
+    Int_t total_hits = hits.GetEntriesFast();
+    return total_hits;
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
+}
+
 vector2d_F stsTrackParameters(RVec<BmnGlobalTrack> global_tracks, RVec<CbmStsTrack> tracks)
 try {
   vector2d_F parameters;
@@ -474,9 +483,9 @@ try {
   throw;
 }
 
-RVec<int> stsTrackNdf(RVec<BmnGlobalTrack> global_tracks, RVec<CbmStsTrack> tracks)
+vector1d_I stsTrackNdf(RVec<BmnGlobalTrack> global_tracks, RVec<CbmStsTrack> tracks)
 try {
-  vector<int> vec_ndf;
+  vector1d_I vec_ndf;
   for (auto& global_track : global_tracks) {
         auto idx = global_track.GetGemTrackIndex();
         auto track = tracks.at(idx);
@@ -491,9 +500,9 @@ try {
   throw;
 }
 
-RVec<int> stsTrackNhits(RVec<BmnGlobalTrack> global_tracks, RVec<CbmStsTrack> tracks)
+vector1d_I stsTrackNhits(RVec<BmnGlobalTrack> global_tracks, RVec<CbmStsTrack> tracks)
 try {
-  vector<int> vec_ndf;
+  vector1d_I vec_ndf;
   for (auto& global_track : global_tracks) {
     auto idx = global_track.GetGemTrackIndex();
     auto track = tracks.at(idx);
@@ -509,17 +518,22 @@ try {
 }
 
 /// BeamHit
-vector<XYZVector> beamHitXYZ(const RVec<BmnSiBTHit> tracks)
-try {
-  vector<XYZVector> pos;
-  for (auto track:tracks){
-    pos.push_back({track.GetX(), track.GetY(), track.GetZ()});
+enum class ComponentXYZ_Convert { X, Y, Z };
+
+auto beamHitXYZ(ComponentXYZ_Convert type) {
+  return [type](const RVec<BmnSiBTHit> tracks) -> vector1d_F {
+    vector1d_F out_vec;
+    out_vec.reserve(tracks.size());
+    for (auto track:tracks){
+      switch (type) {
+        case DcaTypeConvert::X: pos.push_back(track.GetX()); break;
+        case DcaTypeConvert::Y: pos.push_back(track.GetX()); break;
+        case DcaTypeConvert::Z: pos.push_back(track.GetX()); break;
+      }
+    }
+    return out_vec;
   }
-  return pos;
-} catch (const std::exception& e) {
-  std::cout << __func__ << ": " << e.what() << std::endl;
-  throw;
-}
+};
 
 vector1d_I beamHitStation(const RVec<BmnSiBTHit> tracks)
 try {
@@ -1516,6 +1530,12 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
     .Define("vtxPvChi2","(Float_t)PrimaryVertex.fChi2")
     .Define("vtxPvNdf","PrimaryVertex.fNDF")
     .Define("vtxPvChi2Ndf","return (Float_t)PrimaryVertex.fChi2/PrimaryVertex.fNDF")
+    //Total hits
+    .Define("fsdMultHits", GetNHits_Convert, { "BmnSiliconHit" })
+    .Define("gemMultHits", GetNHits_Convert, { "BmnGemStripHit" })
+    .Define("tof400MultHits", GetNHits_Convert, { "BmnTof400Hit" })
+    .Define("tof700MultHits", GetNHits_Convert, { "BmnTof700Hit" })
+    .Define("sibtMultHits", GetNHits_Convert, { "BmnSiBTHit" })
     //global tracks    
     .Define("trNhits","BmnGlobalTrack.fNhits")
     .Define("trNdf","BmnGlobalTrack.fNDF")
@@ -1547,9 +1567,7 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
     .Define("fsdDigits","SILICON.fUniqueID")
     .Define("tof400Digits","TOF400.fUniqueID")
     .Define("tof700Digits","TOF701.fUniqueID")
-    //.Define("tof400Digits","return (TOF400.fUniqueID).size()")
-    //.Define("tof700Digits","return (TOF701.fUniqueID).size()") // в digi - правильная ветка 701, в dst 700
-    // Далее идут vector<vector< float >> или lheujt
+    //Track
     .Define("stsTrackCovMatrix", covMatrix, { "BmnGlobalTrack", "StsVector" })
     .Define("stsTrackMagField", magneticField, { "BmnGlobalTrack", "StsVector", "StsHit" })
     .Define("stsTrackParameters", stsTrackParameters, { "BmnGlobalTrack", "StsVector" })
@@ -1557,14 +1575,16 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
     .Define("globalTrackParameters", trParamFirst, { "BmnGlobalTrack" })
     .Define("globalTrackCovMatrix", globalTrackCovMatrix, { "BmnGlobalTrack" })
     //beam track
-    .Define("beamHitXYZ", beamHitXYZ, { "BmnSiBTHit" })
+    .Define("beamHitX", beamHitXYZ(ComponentXYZ_Convert::X), { "BmnSiBTHit" })
+    .Define("beamHitY", beamHitXYZ(ComponentXYZ_Convert::Y), { "BmnSiBTHit" })
+    .Define("beamHitZ", beamHitXYZ(ComponentXYZ_Convert::Z), { "BmnSiBTHit" })
     .Define("beamHitStation", beamHitStation, { "BmnSiBTHit" })
     .Define("beamHitIndex",   beamHitIndex,   { "BmnSiBTHit" })
     .Define("beamTrackChi2","BmnBeamTrack.fChi2")
     .Define("beamTrackNDF", "BmnBeamTrack.fNDF")
     .Define("beamTrackB",   "BmnBeamTrack.fB")
     .Define("beamTrackParameters", BeamTrackParameters, { "BmnBeamTrack" })
-    //sts track
+    //sts track (FSD+GEM) с привязкой к глобал треку
     .Define("stsTrackMomentum", stsTrackMomentum, { "BmnGlobalTrack", "StsVector" })
     .Define("stsTrackChi2Ndf", stsTrackChi2Ndf, { "BmnGlobalTrack", "StsVector" })
     .Define("stsTrackNdf", stsTrackNdf, { "BmnGlobalTrack", "StsVector" })
@@ -1625,9 +1645,10 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
     //for Centrality with Dim
     // all ch track
     .Define("track_multiplicity", "return trPq.size();")
-    .Define("track_multiplicity_gt", RefMult_gt(0.05,2.0,0.7,2.7,1),{"trPt","trEta","trDcaR"}) //0.05<pt<2 && 0.7<eta<2.7 && dca_R<1
-    .Define("track_multiplicity_gt_pv", RefMult_gt(0.05,2.0,0.7,2.7,1),{"trPt","trEta","trDcaRPv"}) //0.05<pt<2 && 0.7<eta<2.7 && dca_R<1
-    .Define("track_multiplicity_gt2",RefMult_gt(0.05,2.0,0.7,2.7,3),{"trPt","trEta","trDcaR"}) //0.05<pt<2 && 0.7<eta<2.7 && dca_R<3
+    .Define("track_multiplicity_gt", RefMult_gt(0.05,2.0,0.7,2.5,1),{"trPt","trEta","trDcaR"}) //0.05<pt<2 && 0.7<eta<2.7 && dca_R<1
+    .Define("track_multiplicity_gt_pv", RefMult_gt(0.05,2.0,0.7,2.5,1),{"trPt","trEta","trDcaRPv"}) //0.05<pt<2 && 0.7<eta<2.7 && dca_R<1
+    .Define("track_multiplicity_dca2",RefMult_gt(0.05,2.0,0.7,2.5,2),{"trPt","trEta","trDcaR"}) //0.05<pt<2 && 0.7<eta<2.7 && dca_R<2
+    .Define("track_multiplicity_dca3",RefMult_gt(0.05,2.0,0.7,2.5,3),{"trPt","trEta","trDcaR"}) //0.05<pt<2 && 0.7<eta<2.7 && dca_R<3
     .Define("track_multiplicity_M", RefMult_M,{"trPq"})
     //
     .Define("vtxXcorr", vtx_correction_generator(g1_FitVtxX), {"vtxX","runId"})
@@ -1645,6 +1666,7 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
     //.Filter("vtxNtracks >= 2")
     //.Filter("vtxRcorr < 1.")
     //.Filter("vtxZcorr < 1.")
+    //.Filter("noPileup==1")
 //    .Define("fdQ","Sum(FDPoint.fCharge*FDPoint.fCharge)")
 //    .Define("fdLight","Sum(FDPoint.fLightYield)")
 //    .Define("fdEloss", fdEloss, {"FDPoint"})
