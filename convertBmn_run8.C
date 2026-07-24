@@ -7,6 +7,8 @@
 #include <Math/PtEtaPhiE4D.h>
 #include <vector>
 #include <string>
+#include <typeinfo>
+#include <cxxabi.h>
 
 using namespace ROOT;
 using namespace ROOT::Math;
@@ -526,14 +528,14 @@ auto beamHitXYZ(ComponentXYZ_Convert type) {
     out_vec.reserve(tracks.size());
     for (auto track:tracks){
       switch (type) {
-        case DcaTypeConvert::X: pos.push_back(track.GetX()); break;
-        case DcaTypeConvert::Y: pos.push_back(track.GetX()); break;
-        case DcaTypeConvert::Z: pos.push_back(track.GetX()); break;
+        case ComponentXYZ_Convert::X: out_vec.push_back(track.GetX()); break;
+        case ComponentXYZ_Convert::Y: out_vec.push_back(track.GetY()); break;
+        case ComponentXYZ_Convert::Z: out_vec.push_back(track.GetZ()); break;
       }
     }
     return out_vec;
-  }
-};
+  };
+}
 
 vector1d_I beamHitStation(const RVec<BmnSiBTHit> tracks)
 try {
@@ -1096,6 +1098,16 @@ const auto trEnergyLoss = [](int run_id, bool is_physical=false)
 };
 
 //pile-up by Oleg Golosov
+
+int getValue(RVec<int> values, int index)
+try {
+  if(values.size()==0)return -1;
+  return values.at(index);
+} catch (const std::exception& e) {
+  std::cout << __func__ << ": " << e.what() << std::endl;
+  throw;
+}
+
 int CentralHitIndexBC1S(BmnBC1hitInfo hit)
 try {
   return hit.GetCentralHitIndexBC1S();
@@ -1113,58 +1125,34 @@ try {
   throw;
 }
 
-vector1d_F ClosestBC1hitsDt(BmnBC1hitInfo hit)
-try {
+auto ClosestBC1hitsDt(BmnEventClass::id classId) {
+  return [classId](BmnBC1hitInfo& hit) -> vector1d_F {
+    try {
+      return hit.GetClosestBC1hitsDt(classId);
+    } catch (const std::exception& e) {
+      std::cout << __func__ << ": " << e.what() << std::endl;
+      throw;
+    }
+  };
+};
 
-  return hit.GetClosestBC1hitsDt(BmnEventClass::k0);
-} catch (const std::exception& e) {
-  std::cout << __func__ << ": " << e.what() << std::endl;
-  throw;
-}
-
-vector1d_F ClosestBC1hitsDt_k0(BmnBC1hitInfo hit)
-try {
-  return hit.GetClosestBC1hitsDt(BmnEventClass::k0);
-} catch (const std::exception& e) {
-  std::cout << __func__ << ": " << e.what() << std::endl;
-  throw;
-}
-
-vector1d_F ClosestBC1hitsDt_kV0(BmnBC1hitInfo hit)
-try {
-  return hit.GetClosestBC1hitsDt(BmnEventClass::kV0);
-} catch (const std::exception& e) {
-  std::cout << __func__ << ": " << e.what() << std::endl;
-  throw;
-}
-
-vector1d_F ClosestBC1hitsDt_k1(BmnBC1hitInfo hit)
-try {
-  return hit.GetClosestBC1hitsDt(BmnEventClass::k1);
-} catch (const std::exception& e) {
-  std::cout << __func__ << ": " << e.what() << std::endl;
-  throw;
-}
-
-vector1d_F ClosestBC1hitsDt_kV1(BmnBC1hitInfo hit)
-try {
-  return hit.GetClosestBC1hitsDt(BmnEventClass::kV1);
-} catch (const std::exception& e) {
-  std::cout << __func__ << ": " << e.what() << std::endl;
-  throw;
-}
-
-
-// root -l -q -b convertBmn_run8.C'("/eos/nica/bmn/exp/dst/run8/25.09.0/mpd_run_Top_8130_ev0_p6.root","/eos/nica/bmn/exp/dst/run8/25.09.0/mpd_run_Top_8130_ev0_p6.root")'
+// root -l -q -b convertBmn_run8.C'("/eos/nica/bmn/exp/dst/run8/25.09.0/mpd_run_Top_7870_ev0_p6.root","/eos/nica/bmn/exp/digi/run8/25.09.0/mpd_run_Top_7870_ev0_p6.root")'
 
 // main functions
 void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.root", 
-                     std::string inRunidDedxCalib = "run8_dedx_calibR_coeff.root", std::string inStsStationDedxCalib = "run8_dedx_calibS_coeff.root",
+                     std::string inRunidDedxCalib = "run8_dedx_calibR_coeff.root", 
+                     std::string inStsStationDedxCalib = "run8_dedx_calibS_coeff.root",
                      std::string fileOut = "out.tree.root",
-                     std::string str_pid400_functions_file = "pars400_25.04.root", std::string str_pid700_functions_file = "pars700_25.04.root")
+                     std::string str_pid400_functions_file = "pars400_25.04.root", 
+                     std::string str_pid700_functions_file = "pars700_25.04.root",
+                     std::string VtxXYZ_corr_file = "run8_25.09_corr_VtxXYZ.root",
+                     std::string BC1_FD_corr_file = "run8_25.09_corr_bc1fd.root")
 {
   
-  gInterpreter->GenerateDictionary("ROOT::RVec<ROOT::RVec<float>>", "ROOT/RVec.hxx");
+  //Вызвать 1 раз для создания словаря  
+  //gInterpreter->GenerateDictionary("ROOT::RVec<ROOT::RVec<float>>", "ROOT/RVec.hxx");
+  //Подключать словарь
+  gSystem->Load("/nica/mpd1/demanov/convert/convert_run8_25.09/AutoDict_ROOT__RVec_ROOT__RVec_float___cxx.so");
 
   TStopwatch timer1;
   timer1.Start();
@@ -1284,7 +1272,6 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
   b_dedx_calib = g1_a_b_uTol->GetPointY(1);
   //dEdx calib
 
-  //magField = new BmnNewFieldMap("field_sp41v5_ascii_Extrap.root");
   //FieldMap_1900_extrap_noPed
   magField = new BmnNewFieldMap("FieldMap_1900_extrap_noPed.root");
   magField->SetScale(fieldScale);
@@ -1329,6 +1316,8 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
     f1_1000010020_m_400->SetParameters(pars400_de_x0);
     delete [] pars400_de_x0;
     file_pid400->Close();
+  }else{
+    std::cout<<"Warning! file_pid400 not found!"<<std::endl;
   }
 
   auto file_pid700 = TFile::Open( str_pid700_functions_file.c_str(), "READ" );
@@ -1359,19 +1348,12 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
     delete f1_1000010020_m_400_proto;
     delete f1_1000010020_m_700_proto;
     file_pid700->Close();
+  }else{
+    std::cout<<"Warning! file_pid700 not found!"<<std::endl;
   }
   
-
-
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
   //Для работы с центральностью с димом
   TGraphErrors* g1_FitVtxX = nullptr;
@@ -1383,20 +1365,27 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
   TGraphErrors* g1_m_FitFD = nullptr;
   TGraphErrors* g1_s_FitFD = nullptr;
   
-  auto file_fit_VtxXYZ = TFile::Open( "/nica/mpd1/demanov/convert/convert_run8_25.09/run8_25.09_corr_VtxXYZ_cent.root", "READ" );
-  auto file_fit_bc1fd =  TFile::Open( "/nica/mpd1/demanov/convert/convert_run8_25.09/run8_25.09_corr_bc1fd_cent.root", "READ" );
+  auto file_fit_VtxXYZ = TFile::Open( VtxXYZ_corr_file.c_str(), "READ" );
+  auto file_fit_bc1fd =  TFile::Open( BC1_FD_corr_file.c_str(), "READ" );
   
   if(file_fit_VtxXYZ!=nullptr){
     file_fit_VtxXYZ->cd();
     g1_FitVtxX = file_fit_VtxXYZ->Get<TGraphErrors>("grGausNew_cct_nVtxMpd2_h2_RunId_vtx_x_mpd");
     g1_FitVtxY = file_fit_VtxXYZ->Get<TGraphErrors>("grNew_cct_nVtxMpd2_h2_RunId_vtx_y_mpd");
     g1_FitVtxZ = file_fit_VtxXYZ->Get<TGraphErrors>("grNew_cct_nVtxMpd2_h2_RunId_vtx_z_mpd");
-    
+    file_fit_VtxXYZ->Close();
+  }else{
+    std::cout<<"Warning! file_fit_VtxXYZ not found!"<<std::endl;
+  }
+  if(file_fit_bc1fd!=nullptr){
     file_fit_bc1fd->cd();
     g1_m_FitBC1 = file_fit_bc1fd->Get<TGraphErrors>("gr_cct_nVtxMpd2_h2_RunId_bc1sInt_1");
     g1_s_FitBC1 = file_fit_bc1fd->Get<TGraphErrors>("gr_cct_nVtxMpd2_h2_RunId_bc1sInt_2");
     g1_m_FitFD = file_fit_bc1fd->Get<TGraphErrors>("gr_cct_nVtxMpd2_h2_RunId_fdInt_1");
     g1_s_FitFD = file_fit_bc1fd->Get<TGraphErrors>("gr_cct_nVtxMpd2_h2_RunId_fdInt_2");
+    file_fit_bc1fd->Close();
+  }else{
+    std::cout<<"Warning! file_fit_bc1fd not found!"<<std::endl;
   }
   ///////// Warning part /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   if(g1_FitVtxX==nullptr) std::cout<<"Warning! No corrections found for VtxX. These corrections will not be applied."<<std::endl;
@@ -1408,7 +1397,6 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
   if(g1_m_FitFD==nullptr) std::cout<<"Warning! No corrections found for mean FD. These corrections will not be applied."<<std::endl;
   if(g1_s_FitFD==nullptr) std::cout<<"Warning! No corrections found for sigma FD. These corrections will not be applied."<<std::endl;
 
-  
   //cirrections functions
   auto vtx_correction_generator = []( TGraphErrors* g1_calib ){
       return [g1_calib](float _val, UInt_t _runId){
@@ -1448,62 +1436,39 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
     return Mult;
   };  
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
   auto dd=d
-    // pileup
-    .Define("centralHitIndex",CentralHitIndexBC1S,{"BmnBC1hitInfo."})
-    //.Filter("centralHitIndex>=0")
-    .Define("k1central",  BC1hitClasses,{"BmnBC1hitInfo.","centralHitIndex"})
-    .Define("k0closest",  ClosestBC1hitsDt_k0, {"BmnBC1hitInfo."})
-    .Define("kV0closest", ClosestBC1hitsDt_kV0,{"BmnBC1hitInfo."})
-    .Define("k1closest",  ClosestBC1hitsDt_k1, {"BmnBC1hitInfo."})
-    .Define("kV1closest", ClosestBC1hitsDt_kV1,{"BmnBC1hitInfo."})
-    .Define("k0cut", "k0closest.at(0)<-200 && k0closest.at(1)>200") 
-    .Define("kV0cut", "kV0closest.at(0)<-200 && kV0closest.at(1)>200") 
-    .Define("k1cut", "k1closest.at(0)<-1600 && k1closest.at(1)>600") 
-    .Define("kV1cut", "kV1closest.at(0)<-1800 && kV1closest.at(1)>600")
-    .Define("noPileup", "if(k1central==1 && k0cut && kV0cut && k1cut && kV1cut) return 1; else if(k1central==-1) return -1; else return 0;")
     .Define("runId",[run_id](){ return run_id; }, {} )
     .Define("evtId","DstEventHeader.fEventId")
     //trigger mask
     .Define("triggerMapBR","BmnTrigInfo.fInputsBR")
     .Define("triggerMapAR","BmnTrigInfo.fInputsAR")
     //BC1
-    .Define("bc1sNSamples",trigNSamples,{"TQDC_BC1S"})
+    //.Define("bc1sNSamples",trigNSamples,{"TQDC_BC1S"})
     .Define("bc1sIntegral",trigIntegral,{"TQDC_BC1S"})
     .Define("bc1sAmplitude",trigAmp,{"TQDC_BC1S"})
-    .Define("bc1sTrigTime",trigTime,{"TQDC_BC1S"})
     .Define("bc1sTdcValues",trigValues,{"TQDC_BC1S"})
     .Define("bc1sTdcTimes",trigTdcTimes,{"TQDC_BC1S"})
     //BC2AS
     .Define("bc2asIntegral",trigIntegral,{"TQDC_BC2AS"})
     .Define("bc2asAmplitude",trigAmp,{"TQDC_BC2AS"})
-    .Define("bc2asTrigTime",trigTime,{"TQDC_BC2AS"})
-    .Define("bc2asTimes",trigTdcTimes,{"TQDC_BC2AS"})
+    .Define("bc2asTdcValues",trigValues,{"TQDC_BC2AS"})
+    .Define("bc2asTdcTimes",trigTdcTimes,{"TQDC_BC2AS"})
     //BC2MS
     .Define("bc2msIntegral",trigIntegral,{"TQDC_BC2MS"})
     .Define("bc2msAmplitude",trigAmp,{"TQDC_BC2MS"})
-    .Define("bc2msTrigTime",trigTime,{"TQDC_BC2MS"})
-    .Define("bc2msTimes",trigTdcTimes,{"TQDC_BC2MS"})
+    .Define("bc2msTdcValues",trigValues,{"TQDC_BC2MS"})
+    .Define("bc2msTdcTimes",trigTdcTimes,{"TQDC_BC2MS"})
     //vcs
-    .Define("vcsNSamples",trigNSamples,{"TQDC_VCS"})
     .Define("vcsIntegral",trigIntegral,{"TQDC_VCS"})
     .Define("vcsAmplitude",trigAmp,{"TQDC_VCS"})
-    .Define("vcsTrigTime",trigTime,{"TQDC_VCS"})
     .Define("vcsTdcValues",trigValues,{"TQDC_VCS"})
     .Define("vcsTdcTimes",trigTdcTimes,{"TQDC_VCS"})
     //FD
-    .Define("fdNSamples",trigNSamples,{"TQDC_FD"})
+    //.Define("fdNSamples",trigNSamples,{"TQDC_FD"})
     .Define("fdIntegral",trigIntegral,{"TQDC_FD"})
     .Define("fdAmplitude",trigAmp,{"TQDC_FD"})
-    .Define("fdTrigTime",trigTime,{"TQDC_FD"})  
     .Define("fdTdcValues",trigValues,{"TQDC_FD"})
     .Define("fdTdcTimes",trigTdcTimes,{"TQDC_FD"})  
     //BD
@@ -1512,6 +1477,22 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
     .Define("bdModAmp", "BD.fAmp")
     .Define("bdTrigTime", "BD.fTime")
     .Define("siMDMult","BmnTrigInfo.fSiMDMult")
+    // pileup
+    .Define("centralHitIndex", CentralHitIndexBC1S,{"BmnBC1hitInfo."})
+    .Define("centralHitClass", getValue, {"BmnBC1hitInfo.fBC1hitClasses","centralHitIndex"})
+    .Define("k1central",  BC1hitClasses,{"BmnBC1hitInfo.","centralHitIndex"})
+    .Define("k0closest",  ClosestBC1hitsDt(BmnEventClass::k0), {"BmnBC1hitInfo."})
+    .Define("kV0closest", ClosestBC1hitsDt(BmnEventClass::kV0),{"BmnBC1hitInfo."})
+    .Define("k1closest",  ClosestBC1hitsDt(BmnEventClass::k1), {"BmnBC1hitInfo."})
+    .Define("kV1closest", ClosestBC1hitsDt(BmnEventClass::kV1),{"BmnBC1hitInfo."})
+    .Define("k0cut", "k0closest.at(0)<-200 && k0closest.at(1)>200") 
+    .Define("kV0cut", "kV0closest.at(0)<-200 && kV0closest.at(1)>200") 
+    .Define("k1cut", "k1closest.at(0)<-1600 && k1closest.at(1)>600") 
+    .Define("kV1cut", "kV1closest.at(0)<-1800 && kV1closest.at(1)>600")
+    .Define("noPileup", "if(k1central==1 && k0cut && kV0cut && k1cut && kV1cut) return 1; else if(k1central==-1) return -1; else return 0;")
+    .Define("singleIon", "bc1sTdcTimes.size()==1")
+    .Define("BmnBC1hitInfo_FDamp", getValue, {"BmnBC1hitInfo.fFDpeaks","centralHitIndex"})
+    .Define("BmnBC1hitInfo_nBD", getValue, {"BmnBC1hitInfo.fNdigitsBD","centralHitIndex"})
     // Vertex MPD
     .Define("vtxX","(Float_t)MpdVertex.fX")
     .Define("vtxY","(Float_t)MpdVertex.fY")
@@ -1642,30 +1623,23 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
     .Define("fhcalSumE", "float Sum{}; for( auto modE : fhcalModE ){ Sum+=modE; } return Sum; " )
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    //for Centrality with Dim
+    //for Centrality
     // all ch track
     .Define("track_multiplicity", "return trPq.size();")
     .Define("track_multiplicity_gt", RefMult_gt(0.05,2.0,0.7,2.5,1),{"trPt","trEta","trDcaR"}) //0.05<pt<2 && 0.7<eta<2.7 && dca_R<1
     .Define("track_multiplicity_gt_pv", RefMult_gt(0.05,2.0,0.7,2.5,1),{"trPt","trEta","trDcaRPv"}) //0.05<pt<2 && 0.7<eta<2.7 && dca_R<1
-    .Define("track_multiplicity_dca2",RefMult_gt(0.05,2.0,0.7,2.5,2),{"trPt","trEta","trDcaR"}) //0.05<pt<2 && 0.7<eta<2.7 && dca_R<2
-    .Define("track_multiplicity_dca3",RefMult_gt(0.05,2.0,0.7,2.5,3),{"trPt","trEta","trDcaR"}) //0.05<pt<2 && 0.7<eta<2.7 && dca_R<3
     .Define("track_multiplicity_M", RefMult_M,{"trPq"})
-    //
     .Define("vtxXcorr", vtx_correction_generator(g1_FitVtxX), {"vtxX","runId"})
     .Define("vtxYcorr", vtx_correction_generator(g1_FitVtxY), {"vtxY","runId"})
     .Define("vtxZcorr", vtx_correction_generator(g1_FitVtxZ), {"vtxZ","runId"})
     .Define("vtxRcorr","return sqrt(vtxXcorr*vtxXcorr + vtxYcorr*vtxYcorr);" )
-    .Define("vtxPvXcorr", vtx_correction_generator(g1_FitVtxX), {"vtxPvX","runId"})
-    .Define("vtxPvYcorr", vtx_correction_generator(g1_FitVtxY), {"vtxPvY","runId"})
-    .Define("vtxPvZcorr", vtx_correction_generator(g1_FitVtxZ), {"vtxPvZ","runId"})
-    .Define("vtxPvRcorr","return sqrt(vtxPvXcorr*vtxPvXcorr + vtxPvYcorr*vtxPvYcorr);" )
     .Define("bc1sIntegral_nSigma", bc1fd_nSigma(g1_m_FitBC1,g1_s_FitBC1), {"bc1sIntegral","runId"})
     .Define("fdIntegral_nSigma", bc1fd_nSigma(g1_m_FitFD,g1_s_FitFD), {"fdIntegral","runId"})
     //Cuts
     //.Filter("vtxChi2Ndf > std::numeric_limits<float>::min()")
     //.Filter("vtxNtracks >= 2")
     //.Filter("vtxRcorr < 1.")
-    //.Filter("abs(vtxZcorr) < 1.")
+    //.Filter("vtxZcorr < 1.")
     //.Filter("noPileup==1")
 //    .Define("fdQ","Sum(FDPoint.fCharge*FDPoint.fCharge)")
 //    .Define("fdLight","Sum(FDPoint.fLightYield)")
@@ -1681,7 +1655,11 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
 
   vector<string> definedNames;
   vector<string> toExclude={/*"scwallModPos","fhcalModPos","hodoModPos"*/};
-  for (auto& definedName:dd.GetDefinedColumnNames())
+  auto DefineColumnNames = dd.GetDefinedColumnNames();
+  std::sort(DefineColumnNames.begin(), DefineColumnNames.end());
+  
+  //for (auto& definedName:dd.GetDefinedColumnNames())
+  for (auto& definedName:DefineColumnNames)
   {
     bool exclude=false;
     for (auto &nameToExclude:toExclude)
@@ -1693,6 +1671,54 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
     }
   }
   dd.Snapshot("t", fileOut, definedNames);
+
+
+
+  // // Открываем только что созданный файл для чтения
+  // TFile *f = TFile::Open(fileOut.c_str(), "READ");
+  // if (!f || f->IsZombie()) {
+  //     std::cerr << "Ошибка открытия файла: " << fileOut << std::endl;
+  //     return;
+  // }
+
+  // // Получаем указатель на TTree, которое вы сохранили
+  // TTree *tree = (TTree*)f->Get("t");
+  // if (!tree) {
+  //     std::cerr << "Не найдено TTree с именем 't'" << std::endl;
+  //     f->Close();
+  //     return;
+  // }
+
+  // // Получаем общий размер файла
+  // Long64_t totalFileSize = f->GetSize(); // размер в байтах
+
+  // // Перебираем имена веток, которые вы сохранили
+  // for (const auto& branchName : definedNames) {
+  //     TBranch *branch = tree->GetBranch(branchName.c_str());
+  //     if (branch) {
+  //         // Размер после сжатия на диске
+  //         Long64_t zipBytes = branch->GetZipBytes();
+  //         // "Сырой" размер данных без сжатия
+  //         Long64_t totBytes = branch->GetTotBytes();
+          
+  //         // Вычисляем процент от общего размера файла
+  //         double percentOfFile = 0.0;
+  //         if (totalFileSize > 0) {
+  //             percentOfFile = (zipBytes * 100.0) / totalFileSize;
+  //         }
+
+  //         std::cout << "Branch: " << std::left << std::setw(35) << branchName
+  //                   << " | Compressed: " << std::setw(10) << std::fixed << std::setprecision(2) << zipBytes / 1024.0 << " KB"
+  //                   << " | Uncompressed: " << std::setw(10) << std::fixed << std::setprecision(2) << totBytes / 1024.0 << " KB"
+  //                   << " | % of file: " << std::setw(6) << std::fixed << std::setprecision(2) << percentOfFile << "%"
+  //                   << std::endl;
+  //     } else {
+  //         std::cout << "Branch " << branchName << " not found in the saved tree." << std::endl;
+  //     }
+  // }
+
+  // // Дополнительно выводим общий размер файла
+  // std::cout << "\nTotal file size: " << std::fixed << std::setprecision(2) << totalFileSize / 1024.0 / 1024.0 << " MB" << std::endl;
 
   std::cout<<"Convert_done"<<std::endl;
   timer1.Stop();
