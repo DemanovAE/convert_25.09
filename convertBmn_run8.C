@@ -1337,7 +1337,7 @@ auto ClosestBC1hitsDt(BmnEventClass::id classId) {
 void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.root", 
                      std::string inRunidDedxCalib = "./additional_files/run8_dedx_calibR_coeff.root", 
                      std::string inStsStationDedxCalib = "./additional_files/run8_dedx_calibS_coeff.root",
-                     std::string fileOut = "out.tree.root",
+                     std::string fileOut = "out2.tree.root",
                      std::string str_pid400_functions_file = "./additional_files/pars400_25.09.root", 
                      std::string str_pid700_functions_file = "./additional_files/pars700_25.09.root",
                      std::string VtxXYZ_corr_file = "./additional_files/run8_25.09_corr_VtxXYZ.root",
@@ -1750,6 +1750,16 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
     return Mult;
   };  
 
+  auto RefMult_M_woFakeTr = [](RVecF tr_pq, RVecF fkTrPar){
+    unsigned long Mult = 0;
+    for( int i=0; i<tr_pq.size(); ++i ){
+      if(tr_pq.at(i) >= 0.) continue;
+      if(fkTrPar.at(i)<-0.03) continue;
+      Mult += 1;
+    }
+    return Mult;
+  };  
+
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
   auto dd=d
@@ -1959,6 +1969,7 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
     .Define("track_multiplicity_gt", RefMult_gt(0.05,2.0,0.7,2.5,1),{"trPt","trEta","trDcaR"}) //0.05<pt<2 && 0.7<eta<2.7 && dca_R<1
     .Define("track_multiplicity_gt_woFakeTr", RefMult_gt_woFakeTr(0.05,2.0,0.7,2.5,1,-0.03),{"trPt","trEta","trDcaR","trB_FakeTrPar"}) //0.05<pt<2 && 0.7<eta<2.7 && dca_R<1
     .Define("track_multiplicity_M", RefMult_M,{"trPq"})
+    .Define("track_multiplicity_M_woFakeTr", RefMult_M_woFakeTr,{"trPq","trB_FakeTrPar"})
     .Define("vtxXcorr", vtx_correction_generator(g1_FitVtxX), {"vtxX","runId"})
     .Define("vtxYcorr", vtx_correction_generator(g1_FitVtxY), {"vtxY","runId"})
     .Define("vtxZcorr", vtx_correction_generator(g1_FitVtxZ), {"vtxZ","runId"})
@@ -1966,11 +1977,11 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
     .Define("bc1sIntegral_nSigma", bc1fd_nSigma(g1_m_FitBC1,g1_s_FitBC1), {"bc1sIntegral","runId"})
     .Define("fdIntegral_nSigma", bc1fd_nSigma(g1_m_FitFD,g1_s_FitFD), {"fdIntegral","runId"})
     //Cuts
-    //.Filter("vtxChi2Ndf > std::numeric_limits<float>::min()")
-    //.Filter("vtxNtracks >= 2")
-    //.Filter("vtxRcorr < 1.")
-    //.Filter("vtxZcorr < 1.")
-    //.Filter("noPileup==1")
+    .Filter("vtxChi2Ndf > std::numeric_limits<float>::min()")
+    .Filter("vtxNtracks >= 2")
+    .Filter("vtxRcorr < 1.")
+    .Filter("abs(vtxZcorr) < 1.")
+    .Filter("noPileup==1")
 //    .Define("fdQ","Sum(FDPoint.fCharge*FDPoint.fCharge)")
 //    .Define("fdLight","Sum(FDPoint.fLightYield)")
 //    .Define("fdEloss", fdEloss, {"FDPoint"})
@@ -1987,7 +1998,8 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
   vector<string> toExclude={
     "bc1sTdcValues","bc2asTdcValues","bc2msTdcValues","vcsTdcValues","fdTdcValues",
     "tof400Plane","tof400Strip","tof400hitPos","tof400hitT","tof400hitL",
-    "tof700Plane","tof700Strip","tof700hitPos","tof700hitT","tof700hitL"
+    "tof700Plane","tof700Strip","tof700hitPos","tof700hitT","tof700hitL",
+    "stsTrackCovMatrix","stsTrackMagField","globalTrackCovMatrix","stsTrackParameters","globalTrackParameters"
     /*"scwallModPos","fhcalModPos","hodoModPos"*/
   };
   
@@ -2009,7 +2021,6 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
   dd.Snapshot("t", fileOut, definedNames);
 
 
-/*
   // Открываем только что созданный файл для чтения
   TFile *f = TFile::Open(fileOut.c_str(), "READ");
   if (!f || f->IsZombie()) {
@@ -2063,7 +2074,7 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
   // Дополнительно выводим общий размер файла
   std::cout << "\nTotal file size: " << std::fixed << std::setprecision(2) << totalFileSize / 1024.0 / 1024.0 << " MB" << std::endl;
   std::cout << "\nTotal file size: " << std::fixed << std::setprecision(2) << comp_size_tot / 1024.0 / 1024.0 << " MB" << std::endl;
-*/
+
   delete h2_400_run_calib;
   delete h2_700_run_calib;
   delete h2_400_run_strip_calib;
