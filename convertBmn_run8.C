@@ -1126,23 +1126,21 @@ try{
 }
 
 // m2
-vector1d_F trM2(const RVecF mTr, const vector1d_F fBeta)
-try {
-  vector1d_F trM2_;
-  for (int itr=0; itr<mTr.size(); itr++) {
-    auto p = mTr.at(itr);
-    auto p2 = p*p;
-    auto beta = fBeta.at(itr);
-    auto beta2 = beta*beta;
-    auto gamma2 = 1 - beta2;
-    auto m2 = beta > -990. ? p2 / beta2 * gamma2 : -999.0;
-    trM2_.push_back(m2);
-  }
-  return trM2_;
-} catch (const std::exception& e) {
-  std::cout << __func__ << ": " << e.what() << std::endl;
-  throw;
-}
+const auto trM2 = [](Float_t MomScale){
+  return[MomScale](const RVecF mTr, const vector1d_F fBeta){
+    vector1d_F trM2_;
+    for (int itr=0; itr<mTr.size(); itr++) {
+      auto p = mTr.at(itr)*MomScale;
+      auto p2 = p*p;
+      auto beta = fBeta.at(itr);
+      auto beta2 = beta*beta;
+      auto gamma2 = 1 - beta2;
+      auto m2 = beta > -990. ? p2 / beta2 * gamma2 : -999.0;
+      trM2_.push_back(m2);
+    }
+    return trM2_;
+  };
+};
 
 // nSigma PID
 // const auto nSigmaPID = [](TF1* f1_mean, TF1* f1_sigma){
@@ -1162,7 +1160,7 @@ try {
 // };
 
 // nSigma PID
-const auto nSigmaPID = [](TGraphErrors* gr_mean_plus, TGraphErrors* gr_sigma_plus, TGraphErrors *gr_mean_minus, TGraphErrors* gr_sigma_minus){
+const auto nSigmaPID = [](TF1* gr_mean_plus, TF1* gr_sigma_plus, TF1 *gr_mean_minus, TF1* gr_sigma_minus){
   return [gr_mean_plus, gr_sigma_plus, gr_mean_minus, gr_sigma_minus](const RVecF vec_pq, const RVecF vec_m2){
     vector1d_F vec_n_sigma;
     vec_n_sigma.reserve( vec_pq.size() );
@@ -1172,10 +1170,10 @@ const auto nSigmaPID = [](TGraphErrors* gr_mean_plus, TGraphErrors* gr_sigma_plu
       float nSigma = -999.0f;
       float mean = -999.;
       float sigma = -999.;
-      if(pq<0.){
+      if(pq<0. && pq>-6.){
         if(gr_mean_minus!=nullptr && gr_sigma_minus!=nullptr){
           mean = gr_mean_minus->Eval(pq);
-          sigma = gr_mean_minus->Eval(pq);
+          sigma = gr_sigma_minus->Eval(pq);
           nSigma = ( m2 - mean ) / sigma;
         }
       }else if(pq>0.){
@@ -1184,6 +1182,9 @@ const auto nSigmaPID = [](TGraphErrors* gr_mean_plus, TGraphErrors* gr_sigma_plu
           sigma = gr_sigma_plus->Eval(pq);
           nSigma = ( m2 - mean ) / sigma;
         }
+      }
+      if(abs(pq)>=10.){
+        nSigma=-999;
       }
       vec_n_sigma.push_back( (m2!=-999.0) ? nSigma : -999.0f );
     }
@@ -1337,9 +1338,9 @@ auto ClosestBC1hitsDt(BmnEventClass::id classId) {
 void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.root", 
                      std::string inRunidDedxCalib = "./additional_files/run8_dedx_calibR_coeff.root", 
                      std::string inStsStationDedxCalib = "./additional_files/run8_dedx_calibS_coeff.root",
-                     std::string fileOut = "out2.tree.root",
-                     std::string str_pid400_functions_file = "./additional_files/pars400_25.09.root", 
-                     std::string str_pid700_functions_file = "./additional_files/pars700_25.09.root",
+                     std::string fileOut = "./out2.tree.root",
+                     std::string str_pid400_functions_file = "./additional_files/fit_result.root", 
+                     /*std::string str_pid700_functions_file = "./additional_files/pars700_25.09.root",*/
                      std::string VtxXYZ_corr_file = "./additional_files/run8_25.09_corr_VtxXYZ.root",
                      std::string BC1_FD_corr_file = "./additional_files/run8_25.09_corr_bc1fd.root",
                      std::string str_run_tof_calib_file = "./additional_files/tof_time_shift_calib_230726.root")
@@ -1353,6 +1354,10 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
   TStopwatch timer1;
   timer1.Start();
 
+  TString name = gSystem->BaseName(inReco.c_str()); // "mpd_run_Top_7205_ev0_p0.root"
+  name.ReplaceAll(".root", "");
+  std::string only_name_iFileDst = name.Data();
+
   TChain *chainRec=makeChain(inReco, "bmndata");
   TChain *chainDigi=makeChain(inDigi, "bmndata");
   chainRec->AddFriend(chainDigi);
@@ -1362,6 +1367,7 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
 
   DstRunHeader* run_header = dynamic_cast<DstRunHeader*>( chainRec->GetCurrentFile()->Get("DstRunHeader") );
   if (run_header) {
+    cout << "input dst file:\t"<<only_name_iFileDst<<".root"<<endl;
     cout << "\n|||||||||||||||| RUN SUMMARY |||||||||||||||" << endl;
     cout << "||\t\t\t\t\t  ||" << endl;
     cout << "||   Period:        " << run_header->GetPeriodId() << "\t\t\t  ||" << endl;
@@ -1387,7 +1393,8 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
   }
 
   gRandom->SetSeed(0);
-  TString geoFileName = Form("current_geo_file_%d.root", UInt_t(gRandom->Integer(UINT32_MAX)));
+  TString geoFileName = Form("current_geo_file_%s.root", only_name_iFileDst.c_str() );
+  //TString geoFileName = Form("current_geo_file_%d.root", UInt_t(gRandom->Integer(UINT32_MAX)));
   Int_t res_code = UniRun::ReadGeometryFile(run_header->GetPeriodId(), run_header->GetRunId(), (char*)geoFileName.Data());
   if (res_code != 0) {
     cout << "ERROR: could not read geometry file from the database" << endl;
@@ -1479,74 +1486,74 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
 
   // nSigma PID 25.09
   // === ПИОНЫ (211) ===
-  TGraphErrors* f1_211_m_400_plus = nullptr;
-  TGraphErrors* f1_211_s_400_plus = nullptr;
-  TGraphErrors* f1_211_m_400_minus = nullptr;
-  TGraphErrors* f1_211_s_400_minus = nullptr;
-  TGraphErrors* f1_211_m_700_plus = nullptr;
-  TGraphErrors* f1_211_s_700_plus = nullptr;
-  TGraphErrors* f1_211_m_700_minus = nullptr;
-  TGraphErrors* f1_211_s_700_minus = nullptr;
+  TF1* f1_211_m_400_plus = nullptr;
+  TF1* f1_211_s_400_plus = nullptr;
+  TF1* f1_211_m_400_minus = nullptr;
+  TF1* f1_211_s_400_minus = nullptr;
+  TF1* f1_211_m_700_plus = nullptr;
+  TF1* f1_211_s_700_plus = nullptr;
+  TF1* f1_211_m_700_minus = nullptr;
+  TF1* f1_211_s_700_minus = nullptr;
   // === КАОНЫ (321) ===
-  TGraphErrors* f1_321_m_400_plus = nullptr;
-  TGraphErrors* f1_321_s_400_plus = nullptr;
-  TGraphErrors* f1_321_m_400_minus = nullptr;
-  TGraphErrors* f1_321_s_400_minus = nullptr;
-  TGraphErrors* f1_321_m_700_plus = nullptr;
-  TGraphErrors* f1_321_s_700_plus = nullptr;
-  TGraphErrors* f1_321_m_700_minus = nullptr;
-  TGraphErrors* f1_321_s_700_minus = nullptr;
+  TF1* f1_321_m_400_plus = nullptr;
+  TF1* f1_321_s_400_plus = nullptr;
+  TF1* f1_321_m_400_minus = nullptr;
+  TF1* f1_321_s_400_minus = nullptr;
+  TF1* f1_321_m_700_plus = nullptr;
+  TF1* f1_321_s_700_plus = nullptr;
+  TF1* f1_321_m_700_minus = nullptr;
+  TF1* f1_321_s_700_minus = nullptr;
   // === ПРОТОНЫ (2212) ===
-  TGraphErrors* f1_2212_m_400 = nullptr;
-  TGraphErrors* f1_2212_s_400 = nullptr;
-  TGraphErrors* f1_2212_m_700 = nullptr;
-  TGraphErrors* f1_2212_s_700 = nullptr;
+  TF1* f1_2212_m_400 = nullptr;
+  TF1* f1_2212_s_400 = nullptr;
+  TF1* f1_2212_m_700 = nullptr;
+  TF1* f1_2212_s_700 = nullptr;
   // === ДЕЙТРОНЫ (1000010020) ===
-  TGraphErrors* f1_1000010020_m_400 = nullptr;
-  TGraphErrors* f1_1000010020_s_400 = nullptr;
-  TGraphErrors* f1_1000010020_m_700 = nullptr;
-  TGraphErrors* f1_1000010020_s_700 = nullptr;
+  TF1* f1_1000010020_m_400 = nullptr;
+  TF1* f1_1000010020_s_400 = nullptr;
+  TF1* f1_1000010020_m_700 = nullptr;
+  TF1* f1_1000010020_s_700 = nullptr;
 
   auto file_pid400 = TFile::Open( str_pid400_functions_file.c_str(), "READ" );
   if (file_pid400){
     printf("reading PID function from file (TOF400)\n");
     file_pid400->cd();
-    file_pid400->GetObject("211_x0", f1_211_m_400_plus);
-    file_pid400->GetObject("211_sigma", f1_211_s_400_plus);
-    file_pid400->GetObject("211_x0_minus", f1_211_m_400_minus);
-    file_pid400->GetObject("211_sigma_minus", f1_211_s_400_minus);
-    file_pid400->GetObject("321_x0", f1_321_m_400_plus);
-    file_pid400->GetObject("321_sigma", f1_321_s_400_plus);
-    file_pid400->GetObject("321_x0_minus", f1_321_m_400_minus);
-    file_pid400->GetObject("321_sigma_minus", f1_321_s_400_minus);
-    file_pid400->GetObject("2212_x0", f1_2212_m_400);
-    file_pid400->GetObject("2212_sigma", f1_2212_s_400);
-    file_pid400->GetObject("1000010020_sigma", f1_1000010020_s_400);
-    file_pid400->GetObject("1000010020_x0", f1_1000010020_m_400);
-    file_pid400->Close();
+    file_pid400->GetObject("211_x0_400", f1_211_m_400_plus);
+    file_pid400->GetObject("211_sigma_400", f1_211_s_400_plus);
+    file_pid400->GetObject("211_x0_400_minus", f1_211_m_400_minus);
+    file_pid400->GetObject("211_sigma_400_minus", f1_211_s_400_minus);
+    file_pid400->GetObject("321_x0_400", f1_321_m_400_plus);
+    file_pid400->GetObject("321_sigma_400", f1_321_s_400_plus);
+    file_pid400->GetObject("321_x0_400_minus", f1_321_m_400_minus);
+    file_pid400->GetObject("321_sigma_400_minus", f1_321_s_400_minus);
+    file_pid400->GetObject("2212_x0_400", f1_2212_m_400);
+    file_pid400->GetObject("2212_sigma_400", f1_2212_s_400);
+    file_pid400->GetObject("1000010020_sigma_400", f1_1000010020_s_400);
+    file_pid400->GetObject("1000010020_x0_400", f1_1000010020_m_400);
+    //file_pid400->Close();
   }else{
     std::cout<<"Warning! file_pid400 not found!"<<std::endl;
   }
 
-  auto file_pid700 = TFile::Open( str_pid700_functions_file.c_str(), "READ" );
-  if(file_pid700){
+  //auto file_pid700 = TFile::Open( str_pid700_functions_file.c_str(), "READ" );
+  if(file_pid400){
     printf("reading PID function from file (TOF700)\n");
-    file_pid700->cd();
-    file_pid700->GetObject("211_x0", f1_211_m_700_plus);
-    file_pid700->GetObject("211_sigma", f1_211_s_700_plus);
-    file_pid700->GetObject("211_x0_minus", f1_211_m_700_minus);
-    file_pid700->GetObject("211_sigma_minus", f1_211_s_700_minus);
-    file_pid700->GetObject("321_x0", f1_321_m_700_plus);
-    file_pid700->GetObject("321_sigma", f1_321_s_700_plus);
-    file_pid700->GetObject("321_x0_minus", f1_321_m_700_minus);
-    file_pid700->GetObject("321_sigma_minus", f1_321_s_700_minus);
-    file_pid700->GetObject("2212_x0", f1_2212_m_700);
-    file_pid700->GetObject("2212_sigma", f1_2212_s_700);
-    file_pid700->GetObject("1000010020_sigma", f1_1000010020_s_700);
-    file_pid700->GetObject("1000010020_x0", f1_1000010020_m_700);
-    file_pid700->Close();
+    file_pid400->cd();
+    file_pid400->GetObject("211_x0_700", f1_211_m_700_plus);
+    file_pid400->GetObject("211_sigma_700", f1_211_s_700_plus);
+    file_pid400->GetObject("211_x0_700_minus", f1_211_m_700_minus);
+    file_pid400->GetObject("211_sigma_700_minus", f1_211_s_700_minus);
+    file_pid400->GetObject("321_x0_700", f1_321_m_700_plus);
+    file_pid400->GetObject("321_sigma_700", f1_321_s_700_plus);
+    file_pid400->GetObject("321_x0_700_minus", f1_321_m_700_minus);
+    file_pid400->GetObject("321_sigma_700_minus", f1_321_s_700_minus);
+    file_pid400->GetObject("2212_x0_700", f1_2212_m_700);
+    file_pid400->GetObject("2212_sigma_700", f1_2212_s_700);
+    file_pid400->GetObject("1000010020_sigma_700", f1_1000010020_s_700);
+    file_pid400->GetObject("1000010020_x0_700", f1_1000010020_m_700);
+    //file_pid400->Close();
   }else{
-    std::cout<<"Warning! file_pid700 not found!"<<std::endl;
+    std::cout<<"Warning! file_pid400 not found!"<<std::endl;
   }
 
   // PID for 25.04 prod
@@ -1932,10 +1939,10 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
     .Define("trBetaTof700","static_cast<vector1d_F>(BmnGlobalTrack.fBeta700)")
     .Define("trBetaTof400_corr",TofBetaCorr_toTr,{"trP", "trTof400hitT_corr","tof400hitL","trTof400hit"})
     .Define("trBetaTof700_corr",TofBetaCorr_toTr,{"trP", "trTof700hitT_corr","tof700hitL","trTof700hit"})    
-    .Define("trM2Tof400",trM2,{"trP","trBetaTof400"})
-    .Define("trM2Tof700",trM2,{"trP","trBetaTof700"})
-    .Define("trM2Tof400_corr", trM2, {"trP", "trBetaTof400_corr"})
-    .Define("trM2Tof700_corr", trM2, {"trP", "trBetaTof700_corr"})
+    .Define("trM2Tof400",trM2(1.),{"trP","trBetaTof400"})
+    .Define("trM2Tof700",trM2(1.),{"trP","trBetaTof700"})
+    .Define("trM2Tof400_corr", trM2(0.98), {"trP", "trBetaTof400_corr"})
+    .Define("trM2Tof700_corr", trM2(0.98), {"trP", "trBetaTof700_corr"})
     //.Define("trBetaTof400_clean", remove_beta400_from_bad_strips, {"trBetaTof400", "trTof400hit", "tof400Plane", "tof400Strip"})
     //.Define("trBetaTof700_clean", remove_beta700_from_bad_strips, {"trBetaTof700", "trTof700hit", "tof700Plane", "tof700Strip"})
     .Define("trNsigma_211_400",nSigmaPID(f1_211_m_400_plus,f1_211_s_400_plus,f1_211_m_400_minus,f1_211_s_400_minus),{"trPq","trM2Tof400_corr"})
@@ -1998,8 +2005,8 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
   vector<string> toExclude={
     "bc1sTdcValues","bc2asTdcValues","bc2msTdcValues","vcsTdcValues","fdTdcValues",
     "tof400Plane","tof400Strip","tof400hitPos","tof400hitT","tof400hitL",
-    "tof700Plane","tof700Strip","tof700hitPos","tof700hitT","tof700hitL",
-    "stsTrackCovMatrix","stsTrackMagField","globalTrackCovMatrix","stsTrackParameters","globalTrackParameters"
+    "tof700Plane","tof700Strip","tof700hitPos","tof700hitT","tof700hitL"
+    /*"stsTrackCovMatrix","stsTrackMagField","globalTrackCovMatrix","stsTrackParameters","globalTrackParameters"*/
     /*"scwallModPos","fhcalModPos","hodoModPos"*/
   };
   
@@ -2020,7 +2027,7 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
   }
   dd.Snapshot("t", fileOut, definedNames);
 
-
+/*
   // Открываем только что созданный файл для чтения
   TFile *f = TFile::Open(fileOut.c_str(), "READ");
   if (!f || f->IsZombie()) {
@@ -2074,13 +2081,16 @@ void convertBmn_run8(std::string inReco="reco.root", std::string inDigi="digi.ro
   // Дополнительно выводим общий размер файла
   std::cout << "\nTotal file size: " << std::fixed << std::setprecision(2) << totalFileSize / 1024.0 / 1024.0 << " MB" << std::endl;
   std::cout << "\nTotal file size: " << std::fixed << std::setprecision(2) << comp_size_tot / 1024.0 / 1024.0 << " MB" << std::endl;
-
+*/
   delete h2_400_run_calib;
   delete h2_700_run_calib;
   delete h2_400_run_strip_calib;
   delete h2_700_run_strip_calib;
 
   std::cout<<"Convert_done"<<std::endl;
+  file_pid400->Close();
+  gSystem->Exec(Form("rm %s", geoFileName.Data()));
+  
   timer1.Stop();
   timer1.Print();
 }
